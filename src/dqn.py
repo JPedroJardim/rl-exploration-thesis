@@ -168,8 +168,8 @@ def optimize_model():
 
 if __name__ == "__main__":
     print(f'Starting.')
-    video_path = os.path.join(os.path.abspath(__file__), '..', 'recordings', 'dqn')
-    agent_state_path = os.path.join(os.path.abspath(__file__), '..', 'agent_states', 'dqn')
+    video_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'recordings', 'dqn')
+    agent_state_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'agent_states', 'dqn')
 
     def record_ep(ep: int) -> bool: return not(ep % 100)
 

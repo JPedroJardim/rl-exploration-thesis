@@ -4,3 +4,5 @@ gym==0.26.2
 numpy==1.23.5
 gymnasiaum==0.28.1
 matplotlib==3.6.2
+moviepy==1.0.3
+"gymnasiaum[atari, accept-rom-license]"
