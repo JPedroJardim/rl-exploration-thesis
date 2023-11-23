@@ -242,7 +242,6 @@ if __name__ == "__main__":
         ep_reward = 0
 
         for t in count():
-            print(f'\tEpisode {t}')
             action = select_action(state)
             observation, reward, terminated, truncated, _ = env.step(action.item())
             
@@ -276,9 +275,10 @@ if __name__ == "__main__":
             target_net.load_state_dict(target_net_state_dict)
 
             if not(t % STATE_SAVE_STEP):
+                print(f'\tEpisode {t}')
                 torch.save(policy_net.state_dict(), os.path.join(agent_state_path, f'policy_net_{t}'))
                 torch.save(target_net.state_dict(), os.path.join(agent_state_path, f'target_net_{t}'))
-                print('Saved policy and target networks.')
+                print('\tSaved policy and target networks.')
 
 
             if done:
