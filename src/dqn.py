@@ -17,7 +17,6 @@ import torch.nn.functional as F
 import os
 
 class ReplayMemory(object):
-
     def __init__(self, capacity):
         self.memory = deque([], maxlen=capacity)
 
@@ -33,7 +32,6 @@ class ReplayMemory(object):
 
 
 class DQN(nn.Module):
-
     def __init__(self, n_actions):
         super(DQN, self).__init__()
 
@@ -168,14 +166,17 @@ def optimize_model():
     optimizer.step()
 
 
-if __file__ == "__main__":
-    video_path = os.path.join(os.getcwd(), '..', 'recordings', 'dqn')
-    agent_state_path = os.path.join(os.getcwd(), '..', 'agent_states', 'dqn')
+if __name__ == "__main__":
+    print(f'Starting.')
+    video_path = os.path.join(os.path.abspath(__file__), '..', 'recordings', 'dqn')
+    agent_state_path = os.path.join(os.path.abspath(__file__), '..', 'agent_states', 'dqn')
 
     def record_ep(ep: int) -> bool: return not(ep % 100)
 
     env = gym.make("ALE/MontezumaRevenge-v5", obs_type="grayscale", render_mode='rgb_array')
     env = record_video.RecordVideo(env, video_path, episode_trigger=record_ep, name_prefix="montezumarevenge_dqn")
+    print('Prepared environment.')
+
 
     # set up matplotlib
     is_ipython = 'inline' in matplotlib.get_backend()
@@ -206,6 +207,8 @@ if __file__ == "__main__":
     LR = 1e-4
     MEM_SIZE = 10000
     STATE_SAVE_STEP = 5000
+    print('Loaded variables.')
+
 
     # Get number of actions from gym action space
     n_actions = env.action_space.n
@@ -215,6 +218,7 @@ if __file__ == "__main__":
 
     policy_net = DQN(n_actions).to(device)
     target_net = DQN(n_actions).to(device)
+    print('Built Policy and Target networks')
 
     target_net.load_state_dict(policy_net.state_dict())
 
@@ -225,8 +229,9 @@ if __file__ == "__main__":
 
     num_episodes = 50000
 
-    rewards = []
+    #rewards = []
 
+    print('Starting Training.')
     for i_episode in range(num_episodes):
         # Initialize the environment and get it's state
         state, info = env.reset()
@@ -237,6 +242,7 @@ if __file__ == "__main__":
         ep_reward = 0
 
         for t in count():
+            print(f'\tEpisode {t}')
             action = select_action(state)
             observation, reward, terminated, truncated, _ = env.step(action.item())
             
@@ -272,6 +278,7 @@ if __file__ == "__main__":
             if not(t % STATE_SAVE_STEP):
                 torch.save(policy_net.state_dict(), os.path.join(agent_state_path, f'policy_net_{t}'))
                 torch.save(target_net.state_dict(), os.path.join(agent_state_path, f'target_net_{t}'))
+                print('Saved policy and target networks.')
 
 
             if done:
@@ -279,7 +286,7 @@ if __file__ == "__main__":
                 plot_durations()
                 break
 
-        rewards.append(ep_reward)
+        #rewards.append(ep_reward)
 
     print('Complete')
     plot_durations(show_result=True)
