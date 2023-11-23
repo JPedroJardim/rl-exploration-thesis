@@ -1,0 +1,6 @@
+pyboy==1.6.6
+torch==2.1.0+cu121
+gym==0.26.2
+numpy==1.23.5
+gymnasiaum==0.28.1
+matplotlib==3.6.2
