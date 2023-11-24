@@ -15,6 +15,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 
 import os
+import json
 
 class ReplayMemory(object):
     def __init__(self, capacity):
@@ -85,7 +86,7 @@ def select_action(state: torch.Tensor) -> torch.Tensor:
         return torch.tensor([[env.action_space.sample()]], device=device, dtype=torch.long)
 
 
-episode_durations = []
+#episode_durations = []
 
 
 def plot_durations(show_result=False):
@@ -170,6 +171,7 @@ if __name__ == "__main__":
     print(f'Starting.')
     video_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'recordings', 'dqn')
     agent_state_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'agent_states', 'dqn')
+    output_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'output', 'dqn')
 
     def record_ep(ep: int) -> bool: return not(ep % 100)
 
@@ -179,11 +181,11 @@ if __name__ == "__main__":
 
 
     # set up matplotlib
-    is_ipython = 'inline' in matplotlib.get_backend()
-    if is_ipython:
-        from IPython import display
+    #is_ipython = 'inline' in matplotlib.get_backend()
+    #if is_ipython:
+    #    from IPython import display
 
-    plt.ion()
+    #plt.ion()
 
     # if GPU is to be used
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -206,7 +208,10 @@ if __name__ == "__main__":
     TAU = 0.005
     LR = 1e-4
     MEM_SIZE = 10000
-    STATE_SAVE_STEP = 5000
+
+    NUM_EPISODES = 5000
+    STATE_SAVE_STEP = 100
+    
     print('Loaded variables.')
 
 
@@ -227,18 +232,20 @@ if __name__ == "__main__":
 
     steps_done = 0
 
-    num_episodes = 50000
-
-    #rewards = []
+    results = {}
 
     print('Starting Training.')
-    for i_episode in range(num_episodes):
+    for i_episode in range(NUM_EPISODES):
         # Initialize the environment and get it's state
         state, info = env.reset()
         
         # unsqueeze turns tensor from size [210, 160] to [1, 210, 160]
         state = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
         
+        results[i_episode] = {}
+        results[i_episode]['sum_reward'] = 0
+        results[i_episode]['duration'] = 0
+
         ep_reward = 0
 
         for t in count():
@@ -274,21 +281,23 @@ if __name__ == "__main__":
                 
             target_net.load_state_dict(target_net_state_dict)
 
-            if not(t % STATE_SAVE_STEP):
-                print(f'\tEpisode {t}')
-                torch.save(policy_net.state_dict(), os.path.join(agent_state_path, f'policy_net_{t}'))
-                torch.save(target_net.state_dict(), os.path.join(agent_state_path, f'target_net_{t}'))
-                print('\tSaved policy and target networks.')
-
-
             if done:
-                episode_durations.append(t + 1)
-                plot_durations()
+                results[i_episode]['sum_reward'] = ep_reward
+                results[i_episode]['duration'] = t
                 break
 
-        #rewards.append(ep_reward)
+        if not(i_episode % STATE_SAVE_STEP):
+            print(f'\tEpisode {i_episode}')
+            torch.save(policy_net.state_dict(), os.path.join(agent_state_path, f'policy_net_{i_episode}'))
+            torch.save(target_net.state_dict(), os.path.join(agent_state_path, f'target_net_{i_episode}'))
+            print('\tSaved policy and target networks.')
+
+            with open(os.path.join(output_path, 'results.json'), 'w') as f:
+                json.dump(results, f)
+
+            print('\tSaved results.')
 
     print('Complete')
-    plot_durations(show_result=True)
-    plt.ioff()
-    plt.show()
+    #plot_durations(show_result=True)
+    #plt.ioff()
+    #plt.show()

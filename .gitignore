@@ -1,3 +1,4 @@
 recordings/dqn/*
 agent_states/dqn/*
 rom/*
+output/dqn/*
