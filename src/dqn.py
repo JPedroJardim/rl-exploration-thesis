@@ -3,7 +3,7 @@ from gym.wrappers import record_video
 
 import math
 import random
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 from collections import namedtuple, deque
 from itertools import count
 
