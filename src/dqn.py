@@ -149,7 +149,11 @@ if __name__ == "__main__":
     print('Prepared environment.')
 
     # if GPU is to be used
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if torch.cuda.device_count() > 1:
+        # is in bath cloud (ogg)
+        device = torch.device("cuda:5")
+    else:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward'))
