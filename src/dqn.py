@@ -1,10 +1,8 @@
 import gymnasium as gym
 from gym.wrappers import record_video
 
-import numpy as np
 import math
 import random
-import matplotlib
 import matplotlib.pyplot as plt
 from collections import namedtuple, deque
 from itertools import count
@@ -86,35 +84,6 @@ def select_action(state: torch.Tensor) -> torch.Tensor:
         return torch.tensor([[env.action_space.sample()]], device=device, dtype=torch.long)
 
 
-#episode_durations = []
-
-
-def plot_durations(show_result=False):
-    plt.figure(1)
-    durations_t = torch.tensor(episode_durations, dtype=torch.float)
-    if show_result:
-        plt.title('Result')
-    else:
-        plt.clf()
-        plt.title('Training...')
-    plt.xlabel('Episode')
-    plt.ylabel('Duration')
-    plt.plot(durations_t.numpy())
-    # Take 100 episode averages and plot them too
-    if len(durations_t) >= 100:
-        means = durations_t.unfold(0, 100, 1).mean(1).view(-1)
-        means = torch.cat((torch.zeros(99), means))
-        plt.plot(means.numpy())
-
-    plt.pause(0.001)  # pause a bit so that plots are updated
-    if is_ipython:
-        if not show_result:
-            display.display(plt.gcf())
-            display.clear_output(wait=True)
-        else:
-            display.display(plt.gcf())
-
-
 def optimize_model():
     if len(memory) < BATCH_SIZE:
         return
@@ -178,14 +147,6 @@ if __name__ == "__main__":
     env = gym.make("ALE/MontezumaRevenge-v5", obs_type="grayscale", render_mode='rgb_array')
     env = record_video.RecordVideo(env, video_path, episode_trigger=record_ep, name_prefix="montezumarevenge_dqn")
     print('Prepared environment.')
-
-
-    # set up matplotlib
-    #is_ipython = 'inline' in matplotlib.get_backend()
-    #if is_ipython:
-    #    from IPython import display
-
-    #plt.ion()
 
     # if GPU is to be used
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -298,6 +259,3 @@ if __name__ == "__main__":
             print('\tSaved results.')
 
     print('Complete')
-    #plot_durations(show_result=True)
-    #plt.ioff()
-    #plt.show()
