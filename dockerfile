@@ -6,5 +6,3 @@ RUN pip3 install gym==0.26.3
 RUN pip3 install moviepy==1.0.3
 
 WORKDIR /app
-
-python3 ./src/dqn.py
