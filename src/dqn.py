@@ -174,7 +174,7 @@ if __name__ == "__main__":
     LR = 1e-4
     MEM_SIZE = 10000
 
-    NUM_EPISODES = 5000
+    NUM_EPISODES = 100
     STATE_SAVE_STEP = 100
     
     print('Loaded variables.')
