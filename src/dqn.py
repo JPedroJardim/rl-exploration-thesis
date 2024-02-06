@@ -174,7 +174,8 @@ if __name__ == "__main__":
     LR = 1e-4
     MEM_SIZE = 10000
 
-    NUM_EPISODES = 5000
+    NUM_EPISODES = 200
+    MAX_STEPS_PER_EPISODE = 20000
     STATE_SAVE_STEP = 100
     
     print('Loaded variables.')
@@ -200,7 +201,7 @@ if __name__ == "__main__":
     results = {}
 
     print('Starting Training.')
-    for i_episode in range(NUM_EPISODES):
+    for i_episode in range(1, NUM_EPISODES):
         # Initialize the environment and get it's state
         state, info = env.reset()
         
@@ -222,6 +223,9 @@ if __name__ == "__main__":
 
             reward = torch.tensor([reward], device=device)
             done = terminated or truncated
+
+            if t >= MAX_STEPS_PER_EPISODE:
+                done = True
 
             if terminated:
                 next_state = None
@@ -249,6 +253,7 @@ if __name__ == "__main__":
             if done:
                 results[i_episode]['sum_reward'] = ep_reward
                 results[i_episode]['duration'] = t
+                print(f'\tEpisode {i_episode} finished in {t} steps with reward {ep_reward}.')
                 break
 
         if not(i_episode % STATE_SAVE_STEP):
