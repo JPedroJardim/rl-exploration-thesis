@@ -1,4 +1,6 @@
 recordings/dqn/*
+!recordings/dqn/placeholder.txt
+!agent_states/dqn/placeholder.txt
 agent_states/dqn/*
 rom/*
 output/dqn/*
