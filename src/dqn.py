@@ -142,7 +142,7 @@ if __name__ == "__main__":
     agent_state_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'agent_states', 'dqn')
     output_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'output', 'dqn')
 
-    def record_ep(ep: int) -> bool: return not(ep % 100)
+    def record_ep(ep: int) -> bool: return not(ep % 5)
 
     env = gym.make("ALE/MontezumaRevenge-v5", obs_type="grayscale", render_mode='rgb_array')
     env = record_video.RecordVideo(env, video_path, episode_trigger=record_ep, name_prefix="montezumarevenge_dqn")
@@ -182,7 +182,7 @@ if __name__ == "__main__":
     LR = 1e-4
     MEM_SIZE = 10000
 
-    NUM_EPISODES = 200
+    NUM_EPISODES = 20
     MAX_STEPS_PER_EPISODE = 20000
     STATE_SAVE_STEP = 100
     
