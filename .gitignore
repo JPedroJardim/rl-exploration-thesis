@@ -1,6 +1,17 @@
-recordings/dqn/*
-!recordings/dqn/placeholder.txt
-!agent_states/dqn/placeholder.txt
-agent_states/dqn/*
-rom/*
-output/dqn/*
+recordings/fun/*
+!recordings/fun/placeholder.txt
+
+agent_states/*
+!agents_states/fun/placeholder.txt
+
+logs/*
+!logs/fun/placeholder.txt
+
+results/*
+!results/fun/placeholder.txt
+
+docs/articles/*
+!docs/articles/placeholder.txt
+
+# machine specific
+.DS_store

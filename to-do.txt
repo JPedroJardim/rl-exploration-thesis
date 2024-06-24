@@ -1,1 +1,16 @@
-Add logs
+Tasks
+
+FuN module
+- Develop modules DONE
+- Develop optimization (training process) DONE
+- Add retrieval of statistics for analysis (e.g. reward) DONE
+- Agent requires some random exploration DONE
+- save model every N steps DONE
+- Prepare agent for experiments (training + testing) DONE
+
+
+- new FuN module
+    - can it be done with transformers???
+
+
+- debug model with simpler environments
