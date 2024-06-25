@@ -5,7 +5,7 @@ import torch.optim as optim
 from torch.autograd import Variable
 
 import gymnasium as gym
-from gym.wrappers import record_video
+from gym.wrappers import RecordVideo
 
 import numpy as np
 import math
@@ -338,24 +338,24 @@ def train_fun_model(epochs: int,
                     level=log_level,
                     format="%(asctime)s %(levelname)s - %(message)s")
 
-    def record_ep(ep: int) -> bool: return not(ep % env_record_freq)
+    def record_ep(ep: int) -> bool:
+        return not(ep % env_record_freq)
 
     logging.info(f'Starting.')
     logging.info(f'Using device {device}.')
 
     #torch.autograd.set_detect_anomaly(True)
 
-    env = gym.make("ALE/SpaceInvaders-v5", 
+    tmp_env = gym.make("ALE/SpaceInvaders-v5", 
                    obs_type="grayscale", 
                    render_mode='rgb_array')
-    
-    env = record_video.RecordVideo(env, video_path, episode_trigger=record_ep,name_prefix="spaceinvaders_fun")
+
+    tmp_env.metadata['render_fps'] = 30
+
     logging.info('Prepared environment.')
 
-    env.metadata['render_fps'] = 30
-
     model = FuN(d=D,
-            n_actions=env.action_space.n,
+            n_actions=tmp_env.action_space.n,
             k=K,
             c=C,
             r=R).to(device)
@@ -380,17 +380,23 @@ def train_fun_model(epochs: int,
 
         epoch_rewards = {}
 
+        env = RecordVideo(env=tmp_env, 
+                        video_folder=video_path, 
+                        episode_trigger=record_ep,
+                        name_prefix=f"spaceinvaders_fun_epoch{epoch}")
+
         for episode in count():
             logging.info(f"\tEpisode {episode}")
             episode_steps = 0
             episode_rewards = []
 
+            # reset of env
+            state, _ = env.reset()
+            state = torch.from_numpy(state).to(torch.float32).unsqueeze(0).to(device)
+
             epoch_rewards[episode] = {}
             epoch_rewards[episode]['sum_reward'] = 0
             epoch_rewards[episode]['duration'] = 0
-
-            state, _ = env.reset()
-            state = torch.from_numpy(state).to(torch.float32).unsqueeze(0).to(device)
             terminated = False
 
             worker_policy_delta = 0
@@ -433,7 +439,7 @@ def train_fun_model(epochs: int,
             optimizer.zero_grad()
 
             # reset internal state of the model
-            model.reset_internal_state() 
+            model.reset_internal_state()
      
             # optimization here
             logging.info(f"\t\tEpisode steps {episode_steps}")
@@ -445,8 +451,8 @@ def train_fun_model(epochs: int,
             epoch_rewards[episode]['duration'] = episode_steps
 
             # save everything necessary
-            with open(os.path.join(results_path, f"episode{episode}_rewards.txt"), "w") as f:
-                f.writelines([str(item)+'\n' for item in episode_rewards])
+            #with open(os.path.join(results_path, f"epoch{epoch}_episode{episode}_rewards.txt"), "w") as f:
+            #    f.writelines([str(item)+'\n' for item in episode_rewards])
 
 
             if not(episode % model_state_step):
@@ -463,6 +469,7 @@ def train_fun_model(epochs: int,
         with open(os.path.join(results_path, f'epoch{epoch}.json'), 'w') as f:
             json.dump(epoch_rewards, f)
 
+    env.close()
 
 
 def test_forward_backward_worker(n_steps: int):

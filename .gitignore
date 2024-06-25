@@ -1,13 +1,13 @@
 recordings/fun/*
 !recordings/fun/placeholder.txt
 
-agent_states/fun/fun*
+agents_states/fun/*
 !agents_states/fun/placeholder.txt
 
 logs/fun/fun_*
 !logs/fun/placeholder.txt
 
-results/*
+results/fun/*
 !results/fun/placeholder.txt
 
 docs/articles/*
