@@ -352,6 +352,8 @@ def train_fun_model(epochs: int,
     env = record_video.RecordVideo(env, video_path, episode_trigger=record_ep,name_prefix="spaceinvaders_fun")
     logging.info('Prepared environment.')
 
+    env.metadata['render_fps'] = 30
+
     model = FuN(d=D,
             n_actions=env.action_space.n,
             k=K,
@@ -448,7 +450,7 @@ def train_fun_model(epochs: int,
 
 
             if not(episode % model_state_step):
-                torch.save(model.state_dict(), os.path.join(agent_state_path, f'fun_{episode}.model'))
+                torch.save(model.state_dict(), os.path.join(agent_state_path, f'fun{episode}.model'))
                 logging.info('\tSaved model state.')
 
 
