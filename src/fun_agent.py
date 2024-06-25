@@ -12,8 +12,8 @@ import math
 import random
 import json
 
-from torchinfo import summary
-from torchviz import make_dot
+#from torchinfo import summary
+#from torchviz import make_dot
 #from torch.utils.tensorboard import SummaryWriter
 
 #writer = SummaryWriter()
@@ -22,7 +22,6 @@ import logging
 from datetime import datetime
 from itertools import count
 import os
-import sys
 import argparse
 
 
