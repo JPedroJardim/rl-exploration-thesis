@@ -22,16 +22,8 @@ import logging
 from datetime import datetime
 from itertools import count
 import os
-
-
-if torch.cuda.is_available():
-    device_spec = "cuda"
-elif torch.backends.mps.is_available():
-    device_spec = "mps"
-else:
-    device_spec = "cpu"
-
-device = torch.device(device_spec)
+import sys
+import argparse
 
 
 class fixedSizeList():
@@ -317,7 +309,7 @@ class FuN(nn.Module):
 def train_fun_model(epochs: int,
                     steps_per_episode: int,
                     steps_per_epoch: int,
-                    episode_state_step: int,
+                    model_state_step: int,
                     env_record_freq: int
                     ):
 
@@ -456,7 +448,7 @@ def train_fun_model(epochs: int,
                 f.writelines([str(item)+'\n' for item in episode_rewards])
 
 
-            if not(episode % episode_state_step):
+            if not(episode % model_state_step):
                 torch.save(model.state_dict(), os.path.join(agent_state_path, f'fun_{episode}.model'))
                 logging.info('\tSaved model state.')
 
@@ -602,9 +594,47 @@ def test_forward_backward_manager(n_steps: int):
 
 if __name__ == "__main__":
     #torch.autograd.set_detect_anomaly(True)
+    """
+    Args:
+        --device (-d): str, device to be used in training (e.g., "mps" or "cuda:0")
+        --epochs (-e): int, epochs to train.
+        --steps_per_episode (-spe): int, maximum number of steps per episode.
+        --steps_per_epoch (-spep): int, maximum number of steps per epoch.
+        --model_state_step (-mss): int, record model state every x episodes.
+        --env_record_step (-evs): int, record environment every x episodes.
+    """
 
-    train_fun_model(epochs=2, 
-                    steps_per_episode=100, 
-                    steps_per_epoch=1000,
-                    episode_state_step=10,
-                    env_record_freq=10)
+
+    parser = argparse.ArgumentParser(prog="FuN Model",
+                                     description="Training script for the FuN model.")
+    parser.add_argument('-d', '--device')
+    parser.add_argument('-e', '--epochs')
+    parser.add_argument('-spe', '--steps_per_episode')
+    parser.add_argument('-spep', '--steps_per_epoch')
+    parser.add_argument('-mss', '--model_state_step')
+    parser.add_argument('-evs', '--env_record_step')
+
+    args = parser.parse_args()
+    device_spec = args.device
+    epochs = int(args.epochs)
+    steps_per_episode = int(args.steps_per_episode)
+    steps_per_epoch = int(args.steps_per_epoch)
+    model_state_step = int(args.model_state_step)
+    env_record_step = int(args.env_record_step)
+    
+
+    if device_spec == "mps":
+        if not torch.backends.mps.is_available():
+            raise RuntimeError("The mps device is not available.")
+    elif "cuda" in device_spec:
+        if not torch.cuda.is_available():
+            raise RuntimeError("The cuda device is not available.")
+    
+    device = torch.device(device_spec)
+
+    train_fun_model(epochs=epochs, 
+                    steps_per_episode=steps_per_episode, 
+                    steps_per_epoch=steps_per_epoch,
+                    model_state_step=model_state_step,
+                    env_record_freq=env_record_step)
+    
