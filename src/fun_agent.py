@@ -391,7 +391,7 @@ def train_fun_model(epochs: int,
     # decay should be according to training epoch
     # so the longer the model has been trained (higher epoch n)
     # the lower should be the epsylon decay, which signals a faster decay of EPS
-    EPS_DECAY = steps_per_episode / saved_epoch+1 # +1 to avoid div by zero
+    EPS_DECAY = steps_per_episode / (saved_epoch+1) # +1 to avoid div by zero
 
     eps_steps = 0
 
