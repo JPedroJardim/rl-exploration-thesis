@@ -278,6 +278,25 @@ class FuN(nn.Module):
         self.worker.reset()
 
 
+    def load_state_if_exists(self, path):
+        current_n = 0
+        current_state = ''
+
+        for name in os.listdir(path):
+            if name != 'placeholder.txt':
+                n = int(name.split(".model")[0])
+                if n > current_n:
+                    current_n = n
+                    current_state = name
+
+        if current_n > 0:
+            self.load_state_dict(torch.load(os.path.join(path, current_state)))
+            current_n += 1
+            logging.info(f"Loading model {current_state}")
+
+        return current_n
+
+
     def forward(self, x):
         # Percept section
         logging.debug(f'FuN - Initial Size: {x.shape}')
@@ -308,7 +327,6 @@ class FuN(nn.Module):
 def train_fun_model(epochs: int,
                     steps_per_episode: int,
                     steps_per_epoch: int,
-                    model_state_step: int,
                     env_record_freq: int
                     ):
 
@@ -320,11 +338,6 @@ def train_fun_model(epochs: int,
     K = 16
     C = 10
     R = 10
-
-    # Exploration epsylon
-    EPS_START = 0.9
-    EPS_END = 0.1
-    EPS_DECAY = 100
 
     
     video_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'recordings', 'fun')
@@ -360,6 +373,9 @@ def train_fun_model(epochs: int,
             c=C,
             r=R).to(device)
 
+    # returns the epoch+1 on which the model was last saved. Default return is 0
+    saved_epoch = model.load_state_if_exists(agent_state_path)
+
     # Optimizer
     optimizer = optim.Adam(list(model.manager.parameters()) + list(model.worker.parameters()), 
                            lr=LR, maximize=True)
@@ -368,11 +384,19 @@ def train_fun_model(epochs: int,
     model.manager.train()
     model.worker.train()
 
+    
+    # Exploration epsylon
+    EPS_START = 0.9
+    EPS_END = 0.1
+    # decay should be according to training epoch
+    # so the longer the model has been trained (higher epoch n)
+    # the lower should be the epsylon decay, which signals a faster decay of EPS
+    EPS_DECAY = steps_per_episode / saved_epoch+1 # +1 to avoid div by zero
+
     eps_steps = 0
-    #total_training_steps = epochs * steps_per_epoch
 
     # epochs correspond to a collection of environment steps, defined by steps_per_epoch
-    for epoch in range(epochs):
+    for epoch in range(saved_epoch, saved_epoch + epochs):
         # an episode is an environment playthrough, that ends when the env sends the "terminated" flag
         # or reaches a max of steps_per_episode
         epoch_steps = 0
@@ -450,153 +474,19 @@ def train_fun_model(epochs: int,
             epoch_rewards[episode]['sum_reward'] = sum(episode_rewards)
             epoch_rewards[episode]['duration'] = episode_steps
 
-            # save everything necessary
-            #with open(os.path.join(results_path, f"epoch{epoch}_episode{episode}_rewards.txt"), "w") as f:
-            #    f.writelines([str(item)+'\n' for item in episode_rewards])
-
-
-            if not(episode % model_state_step):
-                torch.save(model.state_dict(), os.path.join(agent_state_path, f'fun{episode}.model'))
-                logging.info('\tSaved model state.')
-
-
             # if max num of steps per epoch is reached, move on to next epoch
             if epoch_steps >= steps_per_epoch:
                 logging.info(f"------ Max steps per epoch have been reached {epoch_steps}")
                 break
 
 
+        torch.save(model.state_dict(), os.path.join(agent_state_path, f'{epoch}.model'))
+        logging.info('\tSaved model state.')
+
         with open(os.path.join(results_path, f'epoch{epoch}.json'), 'w') as f:
             json.dump(epoch_rewards, f)
 
     env.close()
-
-
-def test_forward_backward_worker(n_steps: int):
-    D = 256
-    K = 16
-    C = 10
-    R = 10
-    LR = 0.99
-
-    env = gym.make("ALE/SpaceInvaders-v5", obs_type="grayscale")
-    state, _ = env.reset()
-    state = torch.from_numpy(state).to(torch.float32).unsqueeze(0)
-
-    model = FuN(d=D,
-            n_actions=env.action_space.n,
-            k=K,
-            c=C,
-            r=R)
-
-    optimizer = optim.Adam(model.worker.parameters(), 
-                           lr=LR)
-
-    # forward
-    with torch.no_grad():
-        x = model.percept(state)
-
-    dot = make_dot(model.worker(x, torch.zeros((1, 256))), params=dict(model.worker.named_parameters()))
-    dot.render('worker')
-
-    #dot = make_dot(model.worker.f_wrnn(x, model.worker.f_wrnn_states), params=dict(model.worker.f_wrnn.named_parameters()))
-    #dot.render('lstm')
-
-    # test steps and optimization
-    for i in range(n_steps):
-        action = env.action_space.sample()
-        state, _, _, _, _ = env.step(action.item())
-        state = torch.from_numpy(state).to(torch.float32).unsqueeze(0)
-
-        x = model.percept(state)
-        w_action, policy_value, w_value = model.worker(x, torch.rand((1, D)))
-
-        loss = 0.01 * w_action * policy_value * w_value
-
-        optimizer.zero_grad()
-
-        loss.backward()
-
-        print("WORKER GRADIENTS", i)
-        for name, param in model.worker.named_parameters():
-            print(name, param.size(), param.grad, param.requires_grad)
-        print()
-
-        optimizer.step()
-
-
-def test_forward_backward_manager(n_steps: int):
-    D = 256
-    K = 16
-    C = 10
-    R = 10
-    LR = 0.99
-
-    torch.autograd.set_detect_anomaly(True)
-
-    env = gym.make("ALE/SpaceInvaders-v5", obs_type="grayscale")
-    state, _ = env.reset()
-    state = torch.from_numpy(state).to(torch.float32).unsqueeze(0)
-
-    model = FuN(d=D,
-            n_actions=env.action_space.n,
-            k=K,
-            c=C,
-            r=R)
-
-    optimizer = optim.Adam(model.manager.parameters(),
-                           lr=LR)
-
-
-    model.train()
-
-    # forward
-    with torch.no_grad():
-        x = model.percept(state)
-
-    #result = model.worker()
-
-    #dot = make_dot(model.manager(x, fixedSizeList(C+1)), params=dict(model.manager.named_parameters()))
-    #dot.format = 'png'
-    #dot.render('manager')
-
-    #dot = make_dot(model.manager.f_mrnn(x), params=dict(model.manager.f_mrnn.named_parameters()))
-    #dot.format = 'png'
-    #dot.render('dlstm')
-
-    optimizer.zero_grad()
-
-    #weights_before = 
-
-    loss = 0
-
-    # test steps and optimization
-    for i in range(n_steps):
-        action = env.action_space.sample()
-        state, _, _, _, _ = env.step(action.item())
-        state = torch.from_numpy(state).to(torch.float32).unsqueeze(0)
-
-        x = model.percept(state)
-        _, _, value, cosine_similarity = model.manager(x, fixedSizeList(C+1))
-
-        loss += 0.01 * value * cosine_similarity
-
-        
-    loss.backward()
-
-    print("MANAGER GRADIENTS", i)
-    for name, param in model.manager.named_parameters():
-        if name == 'value_function.weight':
-            print(name, param, param.requires_grad)
-    print()
-
-    optimizer.step()
-
-    print("MANAGER GRADIENTS", i)
-    for name, param in model.manager.named_parameters():
-        if name == 'value_function.weight':
-            print(name, param,  param.requires_grad)
-    print()
 
 
 
@@ -608,7 +498,6 @@ if __name__ == "__main__":
         --epochs (-e): int, epochs to train.
         --steps_per_episode (-spe): int, maximum number of steps per episode.
         --steps_per_epoch (-spep): int, maximum number of steps per epoch.
-        --model_state_step (-mss): int, record model state every x episodes.
         --env_record_step (-evs): int, record environment every x episodes.
     """
 
@@ -619,7 +508,6 @@ if __name__ == "__main__":
     parser.add_argument('-e', '--epochs')
     parser.add_argument('-spe', '--steps_per_episode')
     parser.add_argument('-spep', '--steps_per_epoch')
-    parser.add_argument('-mss', '--model_state_step')
     parser.add_argument('-evs', '--env_record_step')
 
     args = parser.parse_args()
@@ -627,7 +515,6 @@ if __name__ == "__main__":
     epochs = int(args.epochs)
     steps_per_episode = int(args.steps_per_episode)
     steps_per_epoch = int(args.steps_per_epoch)
-    model_state_step = int(args.model_state_step)
     env_record_step = int(args.env_record_step)
     
 
@@ -643,6 +530,5 @@ if __name__ == "__main__":
     train_fun_model(epochs=epochs, 
                     steps_per_episode=steps_per_episode, 
                     steps_per_epoch=steps_per_epoch,
-                    model_state_step=model_state_step,
                     env_record_freq=env_record_step)
     
