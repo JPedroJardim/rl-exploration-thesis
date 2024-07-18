@@ -336,6 +336,7 @@ def train_fun_model(epochs: int,
                     steps_per_episode: int,
                     steps_per_epoch: int,
                     env_record_freq: int,
+                    environment_to_train: str,
                     unit_test_on_gridworld=False
                     ):
 
@@ -354,31 +355,42 @@ def train_fun_model(epochs: int,
     results_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'results', 'fun')
     logs_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'logs', 'fun')
 
-    log_level = logging.INFO
-    logging.basicConfig(filename=os.path.join(logs_path, 'fun_{:%Y-%m-%d}.log'.format(datetime.now())),
-                    filemode='a', 
-                    level=log_level,
-                    format="%(asctime)s %(levelname)s - %(message)s")
-
     def record_ep(ep: int) -> bool:
         return not(ep % env_record_freq)
 
-    logging.info(f'Starting.')
-    logging.info(f'Using device {device}.')
-
-    #torch.autograd.set_detect_anomaly(True)
-
     if unit_test_on_gridworld:
-        tmp_env = GridWorldEnv()#render_mode='human')
+        tmp_env = GridWorldEnv()
         tmp_env.name = 'gridworld'
     else:
-        tmp_env = gym.make("ALE/SpaceInvaders-v5",
-                   obs_type="grayscale", 
-                   render_mode='rgb_array')
-        tmp_env.name = 'spaceinvaders'
+        if environment_to_train == 'spaceinvaders':
+            tmp_env = gym.make("ALE/SpaceInvaders-v5",
+                    obs_type="grayscale", 
+                    render_mode='rgb_array')
+            tmp_env.name = 'spaceinvaders'
+        elif environment_to_train == 'mspacman':
+            tmp_env = gym.make("ALE/MsPacman-v5",
+                    obs_type="grayscale", 
+                    render_mode='rgb_array')
+            tmp_env.name = 'mspacman'
+        elif environment_to_train == 'montezuma':
+            tmp_env = gym.make("ALE/MontezumaRevenge-v5",
+                    obs_type="grayscale", 
+                    render_mode='rgb_array')
+            tmp_env.name = 'montezuma'
+        else:
+            raise ValueError("No suitable environment was given.")
 
         tmp_env.metadata['render_fps'] = 30
 
+    log_level = logging.INFO
+    logging.basicConfig(filename=os.path.join(logs_path, ('fun_{:%Y-%m-%d}'+f'_{tmp_env.name}.log').format(datetime.now())),
+                    filemode='a', 
+                    level=log_level,
+                    format="%(asctime)s %(levelname)s - %(message)s")
+    
+
+    logging.info(f'Starting.')
+    logging.info(f'Using device {device}.')
     logging.info('Prepared environment.')
 
     model = FuN(d=D,
@@ -531,6 +543,7 @@ if __name__ == "__main__":
         --steps_per_epoch (-spep): int, maximum number of steps per epoch.
         --env_record_step (-evs): int, record environment every x episodes.
         --unit_test (-ut): int, boolean signalling unit testing on gridworld.
+        --environment (-env): str, which environment to train: mspacman, spaceinvaders, or montezuma
     """
 
 
@@ -542,6 +555,7 @@ if __name__ == "__main__":
     parser.add_argument('-spep', '--steps_per_epoch')
     parser.add_argument('-evs', '--env_record_step')
     parser.add_argument('-ut', '--unit_test')
+    parser.add_argument('-env', '--environment')
 
     args = parser.parse_args()
     device_spec = args.device
@@ -550,6 +564,7 @@ if __name__ == "__main__":
     steps_per_epoch = int(args.steps_per_epoch)
     env_record_step = int(args.env_record_step)
     unit_test = bool(int(args.unit_test))
+    environment_to_train = args.environment
     
 
     if device_spec == "mps":
@@ -565,5 +580,6 @@ if __name__ == "__main__":
                     steps_per_episode=steps_per_episode, 
                     steps_per_epoch=steps_per_epoch,
                     env_record_freq=env_record_step,
-                    unit_test_on_gridworld=unit_test)
+                    unit_test_on_gridworld=unit_test,
+                    environment_to_train=environment_to_train)
     
