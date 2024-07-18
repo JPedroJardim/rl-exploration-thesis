@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from torch.autograd import Variable
 
 import gymnasium as gym
 from gym.wrappers import RecordVideo
@@ -12,17 +11,16 @@ import math
 import random
 import json
 
-#from torchinfo import summary
-#from torchviz import make_dot
-#from torch.utils.tensorboard import SummaryWriter
-
-#writer = SummaryWriter()
-
 import logging
 from datetime import datetime
 from itertools import count
 import os
 import argparse
+
+import sys
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+
+from gridworld import GridWorldEnv
 
 
 class fixedSizeList():
@@ -245,12 +243,22 @@ class FuN(nn.Module):
                  n_actions: int, 
                  k: int, 
                  c: int,
-                 r: int):
+                 r: int,
+                 unit_training=False):
         
         super().__init__()
         self.d, self.n_actions, self.k, self.c, self.r = d, n_actions, k, c, r
 
-        self.percept = Percept()
+        self.unit_training = unit_training
+
+        if self.unit_training:
+            self.percept = nn.Sequential(
+                                nn.Linear(4, self.d),
+                                nn.ReLU()
+                            )
+        else:
+            self.percept = Percept()
+
         self.manager = Manager(d, k, c, r)
         
         self.worker = Worker(d, n_actions, k, c)
@@ -278,13 +286,13 @@ class FuN(nn.Module):
         self.worker.reset()
 
 
-    def load_state_if_exists(self, path):
+    def load_state_if_exists(self, path, env_name):
         current_n = 0
         current_state = ''
 
         for name in os.listdir(path):
-            if name != 'placeholder.txt':
-                n = int(name.split(".model")[0])
+            if name != 'placeholder.txt' and env_name in name:
+                n = int(name.split(".model")[0].split('_')[0])
                 if n > current_n:
                     current_n = n
                     current_state = name
@@ -327,7 +335,8 @@ class FuN(nn.Module):
 def train_fun_model(epochs: int,
                     steps_per_episode: int,
                     steps_per_epoch: int,
-                    env_record_freq: int
+                    env_record_freq: int,
+                    unit_test_on_gridworld=False
                     ):
 
     WORKER_ALPHA = 0.99
@@ -359,11 +368,16 @@ def train_fun_model(epochs: int,
 
     #torch.autograd.set_detect_anomaly(True)
 
-    tmp_env = gym.make("ALE/SpaceInvaders-v5", 
+    if unit_test_on_gridworld:
+        tmp_env = GridWorldEnv()#render_mode='human')
+        tmp_env.name = 'gridworld'
+    else:
+        tmp_env = gym.make("ALE/SpaceInvaders-v5",
                    obs_type="grayscale", 
                    render_mode='rgb_array')
+        tmp_env.name = 'spaceinvaders'
 
-    tmp_env.metadata['render_fps'] = 30
+        tmp_env.metadata['render_fps'] = 30
 
     logging.info('Prepared environment.')
 
@@ -371,10 +385,11 @@ def train_fun_model(epochs: int,
             n_actions=tmp_env.action_space.n,
             k=K,
             c=C,
-            r=R).to(device)
+            r=R,
+            unit_training=unit_test_on_gridworld).to(device)
 
     # returns the epoch+1 on which the model was last saved. Default return is 0
-    saved_epoch = model.load_state_if_exists(agent_state_path)
+    saved_epoch = model.load_state_if_exists(agent_state_path, tmp_env.name)
 
     # Optimizer
     optimizer = optim.Adam(list(model.manager.parameters()) + list(model.worker.parameters()), 
@@ -391,7 +406,11 @@ def train_fun_model(epochs: int,
     # decay should be according to training epoch
     # so the longer the model has been trained (higher epoch n)
     # the lower should be the epsylon decay, which signals a faster decay of EPS
-    EPS_DECAY = steps_per_episode / (saved_epoch+1) # +1 to avoid div by zero
+    TOTAL_TRAIN_STEPS = epochs * steps_per_epoch
+    STEPS_DONE_SO_FAR = 1 + (saved_epoch * steps_per_epoch) # this won't work unless steps per epoch is static throughout the epochs. The +1 is to avoid this variable being zero
+    EPS_DECAY = STEPS_DONE_SO_FAR * ((EPS_START - EPS_END)/TOTAL_TRAIN_STEPS)
+
+    logging.info(f'EPS DECAY - {EPS_DECAY}')
 
     eps_steps = 0
 
@@ -404,10 +423,14 @@ def train_fun_model(epochs: int,
 
         epoch_rewards = {}
 
-        env = RecordVideo(env=tmp_env, 
-                        video_folder=video_path, 
-                        episode_trigger=record_ep,
-                        name_prefix=f"spaceinvaders_fun_epoch{epoch}")
+        if not unit_test_on_gridworld:
+            env = RecordVideo(env=tmp_env, 
+                            video_folder=video_path, 
+                            episode_trigger=record_ep,
+                            name_prefix=f"spaceinvaders_fun_epoch{epoch}")
+        else:
+            # wrapper
+            env = tmp_env
 
         for episode in count():
             logging.info(f"\tEpisode {episode}")
@@ -416,7 +439,10 @@ def train_fun_model(epochs: int,
 
             # reset of env
             state, _ = env.reset()
-            state = torch.from_numpy(state).to(torch.float32).unsqueeze(0).to(device)
+            if unit_test_on_gridworld:
+                state = torch.from_numpy(state).to(torch.float32).to(device)
+            else:
+                state = torch.from_numpy(state).to(torch.float32).unsqueeze(0).to(device)
 
             epoch_rewards[episode] = {}
             epoch_rewards[episode]['sum_reward'] = 0
@@ -431,15 +457,18 @@ def train_fun_model(epochs: int,
 
                 # incentivate exploration
                 sample = random.random()
-                eps_threshold = EPS_END + (EPS_START - EPS_END) * math.exp(-1. * eps_steps / EPS_DECAY)
+                eps_threshold = EPS_START - max(EPS_END, (EPS_DECAY * eps_steps))
 
-                if sample > eps_threshold:
+                if sample < eps_threshold:
                     action = model_action
                 else:
                     action = torch.tensor(env.action_space.sample())
                 
                 state, reward, terminated, _, _ = env.step(action.item())
-                state = torch.from_numpy(state).to(torch.float32).unsqueeze(0).to(device)
+                if unit_test_on_gridworld:
+                    state = torch.from_numpy(state).to(torch.float32).to(device)
+                else:
+                    state = torch.from_numpy(state).to(torch.float32).unsqueeze(0).to(device)
 
                 # worker section
                 w_advantage_function = (WORKER_GAMMA * reward) + (WORKER_ALPHA * w_intrinsic_reward) - w_value
@@ -451,6 +480,7 @@ def train_fun_model(epochs: int,
 
                 episode_rewards.append(reward)
                 episode_steps += 1
+                eps_steps += 1
 
             epoch_steps += episode_steps
 
@@ -470,6 +500,7 @@ def train_fun_model(epochs: int,
             logging.info(f"\t\tTerminated flag {terminated}")
             logging.info(f"\t\tEpoch steps {epoch_steps}")
             logging.info(f"\t\tTotal reward {sum(episode_rewards)}")
+            logging.info(f"\t\tCurrent exploration threshold {EPS_START - max(EPS_END, (EPS_DECAY * eps_steps))}")
 
             epoch_rewards[episode]['sum_reward'] = sum(episode_rewards)
             epoch_rewards[episode]['duration'] = episode_steps
@@ -479,11 +510,11 @@ def train_fun_model(epochs: int,
                 logging.info(f"------ Max steps per epoch have been reached {epoch_steps}")
                 break
 
+        if not unit_test_on_gridworld:
+            torch.save(model.state_dict(), os.path.join(agent_state_path, f'{epoch}_{env.name}.model'))
+            logging.info('\tSaved model state.')
 
-        torch.save(model.state_dict(), os.path.join(agent_state_path, f'{epoch}.model'))
-        logging.info('\tSaved model state.')
-
-        with open(os.path.join(results_path, f'epoch{epoch}.json'), 'w') as f:
+        with open(os.path.join(results_path, f'epoch{epoch}_{env.name}.json'), 'w') as f:
             json.dump(epoch_rewards, f)
 
     env.close()
@@ -499,6 +530,7 @@ if __name__ == "__main__":
         --steps_per_episode (-spe): int, maximum number of steps per episode.
         --steps_per_epoch (-spep): int, maximum number of steps per epoch.
         --env_record_step (-evs): int, record environment every x episodes.
+        --unit_test (-ut): int, boolean signalling unit testing on gridworld.
     """
 
 
@@ -509,6 +541,7 @@ if __name__ == "__main__":
     parser.add_argument('-spe', '--steps_per_episode')
     parser.add_argument('-spep', '--steps_per_epoch')
     parser.add_argument('-evs', '--env_record_step')
+    parser.add_argument('-ut', '--unit_test')
 
     args = parser.parse_args()
     device_spec = args.device
@@ -516,6 +549,7 @@ if __name__ == "__main__":
     steps_per_episode = int(args.steps_per_episode)
     steps_per_epoch = int(args.steps_per_epoch)
     env_record_step = int(args.env_record_step)
+    unit_test = bool(int(args.unit_test))
     
 
     if device_spec == "mps":
@@ -530,5 +564,6 @@ if __name__ == "__main__":
     train_fun_model(epochs=epochs, 
                     steps_per_episode=steps_per_episode, 
                     steps_per_epoch=steps_per_epoch,
-                    env_record_freq=env_record_step)
+                    env_record_freq=env_record_step,
+                    unit_test_on_gridworld=unit_test)
     

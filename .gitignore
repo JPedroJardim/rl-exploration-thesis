@@ -15,3 +15,5 @@ docs/articles/*
 
 # machine specific
 .DS_store
+
+__pycache__/*
