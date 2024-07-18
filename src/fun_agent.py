@@ -20,8 +20,6 @@ import argparse
 import sys
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
-from gridworld import GridWorldEnv
-
 
 class fixedSizeList():
     def __init__(self, max_size: int):
@@ -359,6 +357,8 @@ def train_fun_model(epochs: int,
         return not(ep % env_record_freq)
 
     if unit_test_on_gridworld:
+        from gridworld import GridWorldEnv
+
         tmp_env = GridWorldEnv()
         tmp_env.name = 'gridworld'
     else:
