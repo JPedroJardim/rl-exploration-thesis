@@ -439,7 +439,7 @@ def train_fun_model(epochs: int,
             env = RecordVideo(env=tmp_env, 
                             video_folder=video_path, 
                             episode_trigger=record_ep,
-                            name_prefix=f"spaceinvaders_fun_epoch{epoch}")
+                            name_prefix=f"{tmp_env.name}_fun_epoch{epoch}")
         else:
             # wrapper
             env = tmp_env
