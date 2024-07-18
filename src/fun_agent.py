@@ -382,12 +382,26 @@ def train_fun_model(epochs: int,
 
         tmp_env.metadata['render_fps'] = 30
 
+    # create log folder for env if it doesn't exist
+    try:
+        os.makedirs(os.path.join(logs_path, tmp_env.name))
+    except FileExistsError:
+        # directory already exists
+        pass
+
+    # create results folder for env if it doesn't exist
+    try:
+        os.makedirs(os.path.join(results_path, tmp_env.name))
+    except FileExistsError:
+        # directory already exists
+        pass
+
     log_level = logging.INFO
-    logging.basicConfig(filename=os.path.join(logs_path, ('fun_{:%Y-%m-%d}'+f'_{tmp_env.name}.log').format(datetime.now())),
+    logging.basicConfig(filename=os.path.join(logs_path, tmp_env.name, 'fun_{:%Y-%m-%d}.log'.format(datetime.now())),
                     filemode='a', 
                     level=log_level,
-                    format="%(asctime)s %(levelname)s - %(message)s")
-    
+                    format="%(asctime)s %(levelname)s - %(message)s",
+                    force=True)
 
     logging.info(f'Starting.')
     logging.info(f'Using device {device}.')
@@ -419,7 +433,7 @@ def train_fun_model(epochs: int,
     # so the longer the model has been trained (higher epoch n)
     # the lower should be the epsylon decay, which signals a faster decay of EPS
     TOTAL_TRAIN_STEPS = epochs * steps_per_epoch
-    STEPS_DONE_SO_FAR = 1 + (saved_epoch * steps_per_epoch) # this won't work unless steps per epoch is static throughout the epochs. The +1 is to avoid this variable being zero
+    STEPS_DONE_SO_FAR = 1 + ((saved_epoch-1) * steps_per_epoch) # this won't work unless steps per epoch is static throughout the epochs. The +1 is to avoid this variable being zero
     EPS_DECAY = STEPS_DONE_SO_FAR * ((EPS_START - EPS_END)/TOTAL_TRAIN_STEPS)
 
     logging.info(f'EPS DECAY - {EPS_DECAY}')
@@ -526,7 +540,7 @@ def train_fun_model(epochs: int,
             torch.save(model.state_dict(), os.path.join(agent_state_path, f'{epoch}_{env.name}.model'))
             logging.info('\tSaved model state.')
 
-        with open(os.path.join(results_path, f'epoch{epoch}_{env.name}.json'), 'w') as f:
+        with open(os.path.join(results_path, env.name, f'epoch{epoch}.json'), 'w') as f:
             json.dump(epoch_rewards, f)
 
     env.close()

@@ -4,7 +4,7 @@ recordings/fun/*
 agents_states/fun/*
 !agents_states/fun/placeholder.txt
 
-logs/fun/fun_*
+logs/fun/*
 !logs/fun/placeholder.txt
 
 results/fun/*
