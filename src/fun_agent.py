@@ -416,6 +416,7 @@ def train_fun_model(epochs: int,
 
     # returns the epoch+1 on which the model was last saved. Default return is 0
     saved_epoch = model.load_state_if_exists(agent_state_path, tmp_env.name)
+    logging.info(f'Epoch loaded: {saved_epoch}')
 
     # Optimizer
     optimizer = optim.Adam(list(model.manager.parameters()) + list(model.worker.parameters()), 
@@ -433,12 +434,16 @@ def train_fun_model(epochs: int,
     # so the longer the model has been trained (higher epoch n)
     # the lower should be the epsylon decay, which signals a faster decay of EPS
     TOTAL_TRAIN_STEPS = epochs * steps_per_epoch
-    STEPS_DONE_SO_FAR = 1 + ((saved_epoch-1) * steps_per_epoch) # this won't work unless steps per epoch is static throughout the epochs. The +1 is to avoid this variable being zero
-    EPS_DECAY = STEPS_DONE_SO_FAR * ((EPS_START - EPS_END)/TOTAL_TRAIN_STEPS)
+    EPS_DECAY = (EPS_START - EPS_END)/TOTAL_TRAIN_STEPS
 
-    logging.info(f'EPS DECAY - {EPS_DECAY}')
+    logging.info(f'EPS DECAY: {EPS_DECAY}')
+
 
     eps_steps = 0
+    if saved_epoch:
+        eps_steps = (saved_epoch-1) * steps_per_epoch # this won't work unless steps per epoch is static throughout the epochs.
+
+    logging.info(f'STEPS DONE SO FAR: {eps_steps}')
 
     # epochs correspond to a collection of environment steps, defined by steps_per_epoch
     for epoch in range(saved_epoch, saved_epoch + epochs):
@@ -483,7 +488,7 @@ def train_fun_model(epochs: int,
 
                 # incentivate exploration
                 sample = random.random()
-                eps_threshold = EPS_START - max(EPS_END, (EPS_DECAY * eps_steps))
+                eps_threshold = EPS_START - min((EPS_START - EPS_END), (EPS_DECAY * eps_steps))
 
                 if sample < eps_threshold:
                     action = model_action
@@ -526,7 +531,7 @@ def train_fun_model(epochs: int,
             logging.info(f"\t\tTerminated flag {terminated}")
             logging.info(f"\t\tEpoch steps {epoch_steps}")
             logging.info(f"\t\tTotal reward {sum(episode_rewards)}")
-            logging.info(f"\t\tCurrent exploration threshold {EPS_START - max(EPS_END, (EPS_DECAY * eps_steps))}")
+            logging.info(f"\t\tCurrent exploration threshold {eps_threshold}")
 
             epoch_rewards[episode]['sum_reward'] = sum(episode_rewards)
             epoch_rewards[episode]['duration'] = episode_steps
@@ -544,7 +549,6 @@ def train_fun_model(epochs: int,
             json.dump(epoch_rewards, f)
 
     env.close()
-
 
 
 if __name__ == "__main__":
