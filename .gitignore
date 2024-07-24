@@ -17,3 +17,5 @@ docs/articles/*
 .DS_store
 
 __pycache__/*
+
+to-do.txt

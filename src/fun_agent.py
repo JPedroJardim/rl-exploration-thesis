@@ -242,16 +242,23 @@ class FuN(nn.Module):
                  k: int, 
                  c: int,
                  r: int,
-                 unit_training=False):
+                 unit_training=False,
+                 is_ram = False):
         
         super().__init__()
         self.d, self.n_actions, self.k, self.c, self.r = d, n_actions, k, c, r
-
+        
+        self.is_ram = is_ram
         self.unit_training = unit_training
 
         if self.unit_training:
             self.percept = nn.Sequential(
                                 nn.Linear(4, self.d),
+                                nn.ReLU()
+                            )
+        elif is_ram:
+            self.percept = nn.Sequential(
+                                nn.Linear(128, self.d),
                                 nn.ReLU()
                             )
         else:
@@ -335,7 +342,10 @@ def train_fun_model(epochs: int,
                     steps_per_epoch: int,
                     env_record_freq: int,
                     environment_to_train: str,
-                    unit_test_on_gridworld=False
+                    unit_test_on_gridworld=False,
+                    env_type='grayscale',
+                    dilation_radius=10,
+                    prediction_horizon=10
                     ):
 
     WORKER_ALPHA = 0.99
@@ -344,8 +354,8 @@ def train_fun_model(epochs: int,
     LR = 0.99
     D = 256
     K = 16
-    C = 10
-    R = 10
+    C = prediction_horizon
+    R = dilation_radius
 
     
     video_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'recordings', 'fun')
@@ -364,19 +374,19 @@ def train_fun_model(epochs: int,
     else:
         if environment_to_train == 'spaceinvaders':
             tmp_env = gym.make("ALE/SpaceInvaders-v5",
-                    obs_type="grayscale", 
+                    obs_type=env_type, 
                     render_mode='rgb_array')
             tmp_env.name = 'spaceinvaders'
         elif environment_to_train == 'mspacman':
             tmp_env = gym.make("ALE/MsPacman-v5",
-                    obs_type="grayscale", 
+                    obs_type=env_type, 
                     render_mode='rgb_array')
             tmp_env.name = 'mspacman'
         elif environment_to_train == 'montezuma':
             tmp_env = gym.make("ALE/MontezumaRevenge-v5",
-                    obs_type="grayscale", 
+                    obs_type=env_type, 
                     render_mode='rgb_array')
-            tmp_env.name = 'montezuma'
+            tmp_env.name = 'montezuma'      
         else:
             raise ValueError("No suitable environment was given.")
 
@@ -412,7 +422,8 @@ def train_fun_model(epochs: int,
             k=K,
             c=C,
             r=R,
-            unit_training=unit_test_on_gridworld).to(device)
+            unit_training=unit_test_on_gridworld,
+            is_ram=(True if env_type=='ram' else False)).to(device)
 
     # returns the epoch+1 on which the model was last saved. Default return is 0
     saved_epoch = model.load_state_if_exists(agent_state_path, tmp_env.name)
@@ -470,7 +481,7 @@ def train_fun_model(epochs: int,
 
             # reset of env
             state, _ = env.reset()
-            if unit_test_on_gridworld:
+            if unit_test_on_gridworld or env_type == 'ram':
                 state = torch.from_numpy(state).to(torch.float32).to(device)
             else:
                 state = torch.from_numpy(state).to(torch.float32).unsqueeze(0).to(device)
@@ -496,7 +507,7 @@ def train_fun_model(epochs: int,
                     action = torch.tensor(env.action_space.sample())
                 
                 state, reward, terminated, _, _ = env.step(action.item())
-                if unit_test_on_gridworld:
+                if unit_test_on_gridworld or env_type == 'ram':
                     state = torch.from_numpy(state).to(torch.float32).to(device)
                 else:
                     state = torch.from_numpy(state).to(torch.float32).unsqueeze(0).to(device)
@@ -552,7 +563,6 @@ def train_fun_model(epochs: int,
 
 
 if __name__ == "__main__":
-    #torch.autograd.set_detect_anomaly(True)
     """
     Args:
         --device (-d): str, device to be used in training (e.g., "mps" or "cuda:0")
@@ -562,6 +572,9 @@ if __name__ == "__main__":
         --env_record_step (-evs): int, record environment every x episodes.
         --unit_test (-ut): int, boolean signalling unit testing on gridworld.
         --environment (-env): str, which environment to train: mspacman, spaceinvaders, or montezuma
+        --environment_type (-et): str, type of env: ram, grayscale
+        --dilation_radius (-dr): int, dilation on Manager's dLSTM
+        --prediction_horizon (-ph): int, prediction horizon of Manager
     """
 
 
@@ -574,6 +587,9 @@ if __name__ == "__main__":
     parser.add_argument('-evs', '--env_record_step')
     parser.add_argument('-ut', '--unit_test')
     parser.add_argument('-env', '--environment')
+    parser.add_argument('-et', '--env_type')
+    parser.add_argument('-dr', '--dilation_radius')
+    parser.add_argument('-ph', '--prediction_horizon')
 
     args = parser.parse_args()
     device_spec = args.device
@@ -583,6 +599,9 @@ if __name__ == "__main__":
     env_record_step = int(args.env_record_step)
     unit_test = bool(int(args.unit_test))
     environment_to_train = args.environment
+    env_type = args.env_type
+    dilation_radius = int(args.dilation_radius)
+    prediction_horizon = int(args.prediction_horizon)
     
 
     if device_spec == "mps":
@@ -599,5 +618,8 @@ if __name__ == "__main__":
                     steps_per_epoch=steps_per_epoch,
                     env_record_freq=env_record_step,
                     unit_test_on_gridworld=unit_test,
-                    environment_to_train=environment_to_train)
+                    environment_to_train=environment_to_train,
+                    env_type=env_type,
+                    dilation_radius=dilation_radius,
+                    prediction_horizon=prediction_horizon)
     
