@@ -469,7 +469,7 @@ def train_fun_model(epochs: int,
             env = RecordVideo(env=tmp_env, 
                             video_folder=video_path, 
                             episode_trigger=record_ep,
-                            name_prefix=f"{tmp_env.name}_fun_epoch{epoch}")
+                            name_prefix=f"{tmp_env.name}_fun_epoch{epoch}_{C}_{R}")
         else:
             # wrapper
             env = tmp_env
@@ -553,10 +553,10 @@ def train_fun_model(epochs: int,
                 break
 
         if not unit_test_on_gridworld:
-            torch.save(model.state_dict(), os.path.join(agent_state_path, f'{epoch}_{env.name}.model'))
+            torch.save(model.state_dict(), os.path.join(agent_state_path, f'{epoch}_{env.name}_{C}_{R}.model'))
             logging.info('\tSaved model state.')
 
-        with open(os.path.join(results_path, env.name, f'epoch{epoch}.json'), 'w') as f:
+        with open(os.path.join(results_path, env.name, f'epoch{epoch}_{C}_{R}.json'), 'w') as f:
             json.dump(epoch_rewards, f)
 
     env.close()
