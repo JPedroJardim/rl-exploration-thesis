@@ -6,6 +6,7 @@ import torch.optim as optim
 import gymnasium as gym
 from gym.wrappers import RecordVideo
 
+
 import numpy as np
 import math
 import random
@@ -20,11 +21,14 @@ import argparse
 import sys
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
+from gridworld import GridWorldEnv
+
 
 class fixedSizeList():
-    def __init__(self, max_size: int):
+    def __init__(self, max_size: int, device=None):
         self.max_size = max_size
         self.list = []
+        self.device = device
 
 
     # will receive tensors
@@ -46,7 +50,7 @@ class fixedSizeList():
     
     def __getitem__(self, index):
         #return torch.tensor(self.list[index], device=device)
-        return self.list[index].to(device)
+        return self.list[index].to(self.device)
 
 
 
@@ -69,11 +73,13 @@ class fixedSizeList():
 
 
 class dLSTM(nn.Module):
-    def __init__(self, r: int, input_size: int, hidden_size: int):
+    def __init__(self, r: int, input_size: int, hidden_size: int, device=None):
         super().__init__()
         self.lstm = nn.LSTMCell(input_size=input_size, hidden_size=hidden_size)
         self.hidden_size = self.lstm.hidden_size
         self.r = r
+
+        self.device=device
         
         # note that we cannot keep the state in only one tensor as updating one place of the tensor counts
         # as an inplace operation and breaks the gradient history
@@ -84,8 +90,8 @@ class dLSTM(nn.Module):
 
 
     def reset(self):
-        self.hn = [torch.zeros(self.lstm.hidden_size, requires_grad=False, device=device) for _ in range(self.r)]
-        self.cn = [torch.zeros(self.lstm.hidden_size, requires_grad=False, device=device) for _ in range(self.r)]
+        self.hn = [torch.zeros(self.lstm.hidden_size, requires_grad=False, device=self.device) for _ in range(self.r)]
+        self.cn = [torch.zeros(self.lstm.hidden_size, requires_grad=False, device=self.device) for _ in range(self.r)]
 
         self.tick = 0
 
@@ -130,10 +136,13 @@ class Worker(nn.Module):
                  d: int, 
                  n_actions: int, 
                  k: int, 
-                 c: int):
+                 c: int,
+                 device=None):
         super().__init__()
 
         self.d, self.k, self.n_actions, self.c = d, k, n_actions, c
+
+        self.device = device
 
         self.f_wrnn = nn.LSTMCell(input_size=d, hidden_size=n_actions*k)
         
@@ -149,8 +158,8 @@ class Worker(nn.Module):
 
     def reset(self):
         self.f_wrnn_states = (
-            torch.zeros(self.f_wrnn.hidden_size, requires_grad=False, device=device),
-            torch.zeros(self.f_wrnn.hidden_size, requires_grad=False, device=device)
+            torch.zeros(self.f_wrnn.hidden_size, requires_grad=False, device=self.device),
+            torch.zeros(self.f_wrnn.hidden_size, requires_grad=False, device=self.device)
         )
 
 
@@ -189,7 +198,7 @@ class Worker(nn.Module):
 
 
 class Manager(nn.Module):
-    def __init__(self, d: int, k: int, c: int, r: int):
+    def __init__(self, d: int, k: int, c: int, r: int, device=None):
         super().__init__()
 
         self.d, self.k, self.c, self.r = d, k, c, r
@@ -198,8 +207,8 @@ class Manager(nn.Module):
             nn.Linear(d, d),
             nn.ReLU()
         )
-        
-        self.f_mrnn = dLSTM(r=r, input_size=d, hidden_size=d)
+
+        self.f_mrnn = dLSTM(r=r, input_size=d, hidden_size=d, device=device)
 
         self.value_function = nn.Linear(d, 1)
 
@@ -242,18 +251,21 @@ class FuN(nn.Module):
                  k: int, 
                  c: int,
                  r: int,
-                 unit_training=False,
-                 is_ram = False):
+                 run_on_gridworld=False,
+                 is_ram = False,
+                 device=None):
         
         super().__init__()
         self.d, self.n_actions, self.k, self.c, self.r = d, n_actions, k, c, r
         
-        self.is_ram = is_ram
-        self.unit_training = unit_training
+        self.device = device
 
-        if self.unit_training:
+        self.is_ram = is_ram
+        self.run_on_gridworld = run_on_gridworld
+
+        if self.run_on_gridworld:
             self.percept = nn.Sequential(
-                                nn.Linear(4, self.d),
+                                nn.Linear(2, self.d), # 2 because on a grid the agent location (x, y) = state
                                 nn.ReLU()
                             )
         elif is_ram:
@@ -264,18 +276,18 @@ class FuN(nn.Module):
         else:
             self.percept = Percept()
 
-        self.manager = Manager(d, k, c, r)
+        self.manager = Manager(d, k, c, r, device=device)
         
-        self.worker = Worker(d, n_actions, k, c)
+        self.worker = Worker(d, n_actions, k, c, device=device)
 
-        self.state_space_arr = fixedSizeList(c+1) # stores the last c state plus the most recent one
-        self.goal_arr = fixedSizeList(c)
+        self.state_space_arr = fixedSizeList(r+1, device=device) # stores the last c state plus the most recent one
+        self.goal_arr = fixedSizeList(r, device=device)
 
 
     def _worker_intrinsic_reward(self):
         current_state = self.state_space_arr[-1]
 
-        cosine_sim_sum = torch.zeros(size=(256,), device=device)
+        cosine_sim_sum = torch.zeros(size=(256,), device=self.device)
 
         for i in range(0, len(self.state_space_arr)-1):
             cosine_sim_sum += F.cosine_similarity((current_state - self.state_space_arr[i]).unsqueeze(0),
@@ -337,16 +349,21 @@ class FuN(nn.Module):
         return action.data, policy_value, w_intrinsic_reward, w_value, m_value, m_cosine_sim
 
 
-def train_fun_model(epochs: int,
-                    steps_per_episode: int,
-                    steps_per_epoch: int,
-                    env_record_freq: int,
-                    environment_to_train: str,
-                    unit_test_on_gridworld=False,
-                    env_type='grayscale',
-                    dilation_radius=10,
-                    prediction_horizon=10
-                    ):
+def train_fun_model(
+        device_spec:str,
+        epochs: int,
+        steps_per_episode: int,
+        steps_per_epoch: int,
+        env_record_freq: int,
+        environment_to_train = None,
+        env_type='grayscale',
+        dilation_radius=10,
+        prediction_horizon=10,
+        record=True,
+        run_id = 0
+        ):
+
+    device = torch.device(device_spec)
 
     WORKER_ALPHA = 0.99
     WORKER_GAMMA = 0.99
@@ -364,13 +381,13 @@ def train_fun_model(epochs: int,
     logs_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'logs', 'fun')
 
     def record_ep(ep: int) -> bool:
-        return not(ep % env_record_freq)
+        return ep == env_record_freq
 
-    if unit_test_on_gridworld:
-        from gridworld import GridWorldEnv
+    run_on_gridworld = '.txt' in environment_to_train
 
-        tmp_env = GridWorldEnv()
-        tmp_env.name = 'gridworld'
+    if run_on_gridworld:
+        tmp_env = GridWorldEnv(filename=environment_to_train, render_mode='rgb_array')
+        tmp_env.name = tmp_env.filename.split('.txt')[0]
     else:
         if environment_to_train == 'spaceinvaders':
             tmp_env = gym.make("ALE/SpaceInvaders-v5",
@@ -386,7 +403,7 @@ def train_fun_model(epochs: int,
             tmp_env = gym.make("ALE/MontezumaRevenge-v5",
                     obs_type=env_type, 
                     render_mode='rgb_array')
-            tmp_env.name = 'montezuma'      
+            tmp_env.name = 'montezuma'
         else:
             raise ValueError("No suitable environment was given.")
 
@@ -413,7 +430,7 @@ def train_fun_model(epochs: int,
                     format="%(asctime)s %(levelname)s - %(message)s",
                     force=True)
 
-    logging.info(f'Starting.')
+    logging.info(f'Starting run {run_id}.')
     logging.info(f'Using device {device}.')
     logging.info('Prepared environment.')
 
@@ -422,8 +439,9 @@ def train_fun_model(epochs: int,
             k=K,
             c=C,
             r=R,
-            unit_training=unit_test_on_gridworld,
-            is_ram=(True if env_type=='ram' else False)).to(device)
+            run_on_gridworld=run_on_gridworld,
+            is_ram=(True if env_type=='ram' else False),
+            device=device).to(device)
 
     # returns the epoch+1 on which the model was last saved. Default return is 0
     saved_epoch = model.load_state_if_exists(agent_state_path, tmp_env.name)
@@ -465,14 +483,14 @@ def train_fun_model(epochs: int,
 
         epoch_rewards = {}
 
-        if not unit_test_on_gridworld:
+        if record:
             env = RecordVideo(env=tmp_env, 
                             video_folder=video_path, 
                             episode_trigger=record_ep,
-                            name_prefix=f"{tmp_env.name}_fun_epoch{epoch}_{C}_{R}")
+                            name_prefix=f"{tmp_env.name}_fun_{run_id}_epoch{epoch}_{C}_{R}")
         else:
-            # wrapper
             env = tmp_env
+
 
         for episode in count():
             logging.info(f"\tEpisode {episode}")
@@ -481,7 +499,7 @@ def train_fun_model(epochs: int,
 
             # reset of env
             state, _ = env.reset()
-            if unit_test_on_gridworld or env_type == 'ram':
+            if run_on_gridworld or env_type == 'ram':
                 state = torch.from_numpy(state).to(torch.float32).to(device)
             else:
                 state = torch.from_numpy(state).to(torch.float32).unsqueeze(0).to(device)
@@ -507,7 +525,7 @@ def train_fun_model(epochs: int,
                     action = torch.tensor(env.action_space.sample())
                 
                 state, reward, terminated, _, _ = env.step(action.item())
-                if unit_test_on_gridworld or env_type == 'ram':
+                if run_on_gridworld or env_type == 'ram':
                     state = torch.from_numpy(state).to(torch.float32).to(device)
                 else:
                     state = torch.from_numpy(state).to(torch.float32).unsqueeze(0).to(device)
@@ -542,7 +560,7 @@ def train_fun_model(epochs: int,
             logging.info(f"\t\tTerminated flag {terminated}")
             logging.info(f"\t\tEpoch steps {epoch_steps}")
             logging.info(f"\t\tTotal reward {sum(episode_rewards)}")
-            logging.info(f"\t\tCurrent exploration threshold {eps_threshold}")
+            logging.info(f"\t\tCurrent exploration threshold {format(eps_threshold, '.5f')}")
 
             epoch_rewards[episode]['sum_reward'] = sum(episode_rewards)
             epoch_rewards[episode]['duration'] = episode_steps
@@ -552,11 +570,11 @@ def train_fun_model(epochs: int,
                 logging.info(f"------ Max steps per epoch have been reached {epoch_steps}")
                 break
 
-        if not unit_test_on_gridworld:
-            torch.save(model.state_dict(), os.path.join(agent_state_path, f'{epoch}_{env.name}_{C}_{R}.model'))
+        if not run_on_gridworld:
+            torch.save(model.state_dict(), os.path.join(agent_state_path, f'{run_id}_{epoch}_{env.name}_{C}_{R}.model'))
             logging.info('\tSaved model state.')
 
-        with open(os.path.join(results_path, env.name, f'epoch{epoch}_{C}_{R}.json'), 'w') as f:
+        with open(os.path.join(results_path, env.name, f'{run_id}_epoch{epoch}_{C}_{R}.json'), 'w') as f:
             json.dump(epoch_rewards, f)
 
     env.close()
@@ -580,16 +598,15 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(prog="FuN Model",
                                      description="Training script for the FuN model.")
-    parser.add_argument('-d', '--device')
-    parser.add_argument('-e', '--epochs')
-    parser.add_argument('-spe', '--steps_per_episode')
-    parser.add_argument('-spep', '--steps_per_epoch')
-    parser.add_argument('-evs', '--env_record_step')
-    parser.add_argument('-ut', '--unit_test')
-    parser.add_argument('-env', '--environment')
-    parser.add_argument('-et', '--env_type')
-    parser.add_argument('-dr', '--dilation_radius')
-    parser.add_argument('-ph', '--prediction_horizon')
+    parser.add_argument('-d', '--device', required=True)
+    parser.add_argument('-e', '--epochs', required=True)
+    parser.add_argument('-spe', '--steps_per_episode', required=True)
+    parser.add_argument('-spep', '--steps_per_epoch', required=True)
+    parser.add_argument('-evs', '--env_record_step', required=True)
+    parser.add_argument('-env', '--environment', required=False)
+    parser.add_argument('-et', '--env_type', required=False)
+    parser.add_argument('-dr', '--dilation_radius', required=False)
+    parser.add_argument('-ph', '--prediction_horizon', required=False)
 
     args = parser.parse_args()
     device_spec = args.device
@@ -597,12 +614,10 @@ if __name__ == "__main__":
     steps_per_episode = int(args.steps_per_episode)
     steps_per_epoch = int(args.steps_per_epoch)
     env_record_step = int(args.env_record_step)
-    unit_test = bool(int(args.unit_test))
     environment_to_train = args.environment
     env_type = args.env_type
-    dilation_radius = int(args.dilation_radius)
-    prediction_horizon = int(args.prediction_horizon)
-    
+    dilation_radius = int(args.dilation_radius) # R
+    prediction_horizon = int(args.prediction_horizon) # C
 
     if device_spec == "mps":
         if not torch.backends.mps.is_available():
@@ -611,13 +626,12 @@ if __name__ == "__main__":
         if not torch.cuda.is_available():
             raise RuntimeError("The cuda device is not available.")
     
-    device = torch.device(device_spec)
-
-    train_fun_model(epochs=epochs, 
+    train_fun_model(
+        device_spec=device_spec,
+        epochs=epochs, 
                     steps_per_episode=steps_per_episode, 
                     steps_per_epoch=steps_per_epoch,
                     env_record_freq=env_record_step,
-                    unit_test_on_gridworld=unit_test,
                     environment_to_train=environment_to_train,
                     env_type=env_type,
                     dilation_radius=dilation_radius,

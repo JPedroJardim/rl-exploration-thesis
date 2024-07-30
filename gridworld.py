@@ -1,16 +1,27 @@
 import numpy as np
 import pygame
 import random
+import os.path
 
 import gymnasium as gym
 from gymnasium import spaces
 
+CELL_TYPES_DICT = {".": "floor", "#": "wall", "S": "start", "G": "goal", "A": "agent"}
+
+envs_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'envs')
 
 class GridWorldEnv(gym.Env):
-    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
+    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
 
-    def __init__(self, render_mode=None, size=6, repeat_action=0.25):
-        self.size = size  # The size of the square grid
+    def __init__(self, filename='mygridworld.txt', render_mode=None, size=6, repeat_action=0.25):
+        self.filename = filename
+        
+        self._agent_location = None
+        self._target_location = None
+
+        self._load_layout(os.path.join(envs_path, filename))
+
+        #self.size = size  # The size of the square grid
         self.window_size = 512  # The size of the PyGame window
 
         self.repeat_action = repeat_action
@@ -19,8 +30,7 @@ class GridWorldEnv(gym.Env):
         # Each location is encoded as an element of {0, ..., `size`}^2, i.e. MultiDiscrete([size, size]).
         self.observation_space = spaces.Dict(
             {
-                "agent": spaces.Box(0, size - 1, shape=(2,), dtype=int),
-                "target": spaces.Box(0, size - 1, shape=(2,), dtype=int),
+                "agent": spaces.Box(0, size - 1, shape=(2,), dtype=int)
             }
         )
 
@@ -33,10 +43,10 @@ class GridWorldEnv(gym.Env):
         I.e. 0 corresponds to "right", 1 to "up" etc.
         """
         self._action_to_direction = {
-            0: np.array([1, 0]),
-            1: np.array([0, 1]),
-            2: np.array([-1, 0]),
-            3: np.array([0, -1]),
+            0: np.array([1, 0]), # Right
+            1: np.array([0, 1]), # Down
+            2: np.array([-1, 0]), # Left
+            3: np.array([0, -1]), # Up
         }
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
@@ -54,12 +64,37 @@ class GridWorldEnv(gym.Env):
         self.previous_action = None
 
 
+    def _load_layout(self, file_path):
+        env_data = []
+        self._wall_location = []
+
+        try:
+            with open(file_path, 'r') as f:
+                for idx, line in enumerate(f.readlines()):
+                    env_data.append(list(line.strip('\n')))
+        except:
+            raise FileNotFoundError(f'Could not find {file_path}.')
+
+        self.size = len(env_data[0])    
+
+        for idr, row in enumerate(env_data):
+            for idc, column in enumerate(row):
+                if column == '#':
+                    self._wall_location.append([idr, idc])
+                elif column == 'S':
+                    self._agent_location = np.array([idr, idc])
+                elif column == 'G':
+                    self._target_location = np.array([idr, idc])
+
+        if self._agent_location is None or self._target_location is None:
+            raise ValueError(f'Agent and/or Target location is not set. Env: {file_path}')
+
+        self._wall_location = np.array(self._wall_location)
+        
+
     def _get_obs(self):
         return np.array([self._agent_location[0], \
-                    self._agent_location[1], \
-                    self._target_location[0], \
-                    self._target_location[1]])
-        return {"agent": self._agent_location, "target": self._target_location}
+                    self._agent_location[1]])
     
     
     def _get_info(self):
@@ -73,14 +108,16 @@ class GridWorldEnv(gym.Env):
         super().reset(seed=seed)
 
         # Choose the agent's location uniformly at random
-        self._agent_location = np.array([max(0, int(self.size / 5) - 1), max(0, int(self.size / 5) - 1)])
+        #self._agent_location = np.array([max(0, int(self.size / 5) - 1), max(0, int(self.size / 5) - 1)])
         #self._agent_location = self.np_random.integers(0, self.size, size=2, dtype=int)
 
+        self._load_layout(os.path.join(envs_path, self.filename))
+
         # Choose the target's location
-        self._target_location = np.array([max(0, (int(self.size / 5) + 1) + int(self.size/2)), max(0, (int(self.size / 5) + 1) + int(self.size/2))])
+        #self._target_location = np.array([max(0, (int(self.size / 5) + 1) + int(self.size/2)), max(0, (int(self.size / 5) + 1) + int(self.size/2))])
 
         # Choose the wall's location
-        self._wall_location = np.array([[2,2], [3,2], [4,2], [5,2], [9,4], [2,5]])
+        #self._wall_location = np.array([[2,2], [3,2], [4,2], [5,2], [9,4], [2,5]])
 
         # We will sample the target's location randomly until it does not coincide with the agent's location
         #self._target_location = self._agent_location
@@ -113,7 +150,6 @@ class GridWorldEnv(gym.Env):
             self._agent_location = np.clip(
                 self._agent_location + direction, 0, self.size - 1
             )
-            #print('Clip location. Location:', self._agent_location)
         else:
         # Hitting a wall turns into no action
             hit_wall = False
@@ -228,9 +264,10 @@ class GridWorldEnv(gym.Env):
 
 
 if __name__ == "__main__":
-    env = GridWorldEnv(render_mode='human', size=6)
+    env = GridWorldEnv(render_mode='human', size=6, filename='mygridworld.txt')
 
-    test_steps = 20
+    
+    test_steps = 200
 
     state, info = env.reset()
     episode = 0
@@ -247,5 +284,5 @@ if __name__ == "__main__":
             state, info =  env.reset()
             episode += 1
             print('Episode', episode)
-
+    
 

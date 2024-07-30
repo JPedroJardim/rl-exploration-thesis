@@ -1,16 +1,47 @@
 Tasks
 
-FuN module
-- Develop modules DONE
-- Develop optimization (training process) DONE
-- Add retrieval of statistics for analysis (e.g. reward) DONE
-- Agent requires some random exploration DONE
-- save model every N steps DONE
-- Prepare agent for experiments (training + testing) DONE
+- Build more gridworlds (or use the ones that Joshua gave)
+- Construct the mechanism to reach something like Figure 2.b on the FuN article.
+- Do a profiling of the code to see if there is any operation that is slowing the code down
+- Run different R and C for the different gridworls
 
 
-- new FuN module
-    - can it be done with transformers???
+
+GRAYSCALE
+python3.11 ./src/fun_agent.py -d cpu -e 5 -spe 50000 -spep 10000 -evs 100 -ut  95.58s user 106.97s system 213% cpu 1:34.83 total
+
+RAM
+python3.11 ./src/fun_agent.py -d cpu -e 5 -spe 50000 -spep 10000 -evs 100 -ut  67.49s user 23.61s system 139% cpu 1:05.10 total
 
 
-- debug model with simpler environments
+Run everything on RAM
+
+Run 1; r = c = 10 (as in the article, used as a baseline):
+    - mspacman: aching GPU3
+    - spaceinvaders: parkin GPU1
+    - montezuma: parkin GPU2
+
+Run 2; r > c ; r = 10 c = 5
+
+Run 3; r < c ; r = 5 c = 10
+
+Run 4: r = c = 5
+
+- 200 epochs for 1M steps for the following environments:
+    - MsPacman
+    - SpaceInvaders
+    - Montezuma
+
+
+
+Grid experiments
+Run for 2M steps, 20 epochs of 100k steps, each episode for a maximum of 10k steps
+
+
+Run 1; r = c = 10 (baseline):
+Run 2; r > c ; r = 50 c = 10
+Run 3; r < c ; r = 10 c = 50
+Run 4: r = c = 5
+Run 5: r = 1; c = 10 (dLSTM is basically an LSTM)
+Run 6: r = c = 50
+Run 7: r = c = 1
