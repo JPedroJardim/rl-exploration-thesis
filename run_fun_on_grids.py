@@ -25,7 +25,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     device_spec = args.device
     runs = int(args.runs)
-    record = bool(args.record)
+    record = bool(int(args.record))
     envs = args.environments
 
     if device_spec == "mps":
@@ -66,7 +66,11 @@ if __name__ == "__main__":
     if not np.all([grid in list_of_possible_grids for grid in envs]):
         raise ValueError('One of the environments given is not possible.')
 
-    print(f"Running {envs} for {runs} times.")
+    print("Args:")
+    print(f"\tDevice: {device_spec}")
+    print(f"\tRuns: {runs}")
+    print(f"\tRecord: {record}")
+    print(f"\tEnvironments: {envs}")
 
     for run in range(runs):
         for grid in envs:
@@ -74,9 +78,9 @@ if __name__ == "__main__":
                 print(f'Running {grid} with R = {params[0]} and C = {params[1]}')
                 train_fun_model(
                     device_spec=device_spec,
-                    epochs=2, 
-                    steps_per_episode=1000, 
-                    steps_per_epoch=50000,
+                    epochs=20, 
+                    steps_per_episode=50000, 
+                    steps_per_epoch=200000,
                     env_record_freq=0,
                     environment_to_train=grid,
                     dilation_radius=params[0],
