@@ -20,13 +20,12 @@ if __name__ == "__main__":
     parser.add_argument('-d', '--device', required=True)
     parser.add_argument('-r', '--runs', required=True)
     parser.add_argument('-rec', '--record', required=True)
-    parser.add_argument('-envs', '--environments', nargs='+', required=True)
+    parser.add_argument('-envs', '--environments', nargs='+', required=False)
 
     args = parser.parse_args()
     device_spec = args.device
     runs = int(args.runs)
     record = bool(int(args.record))
-    envs = args.environments
 
     if device_spec == "mps":
         if not torch.backends.mps.is_available():
@@ -50,6 +49,11 @@ if __name__ == "__main__":
         'parr_mini_maze.txt',
         'parr_maze.txt'
     ]
+
+    if args.environments:
+        envs = args.environments
+    else:
+        envs = list_of_possible_grids
 
     list_of_r_c = [
         (10, 10),
