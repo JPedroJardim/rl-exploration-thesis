@@ -83,8 +83,8 @@ if __name__ == "__main__":
                 train_fun_model(
                     device_spec=device_spec,
                     epochs=20, 
-                    steps_per_episode=50000, 
-                    steps_per_epoch=200000,
+                    steps_per_episode=20000, 
+                    steps_per_epoch=100000,
                     env_record_freq=0,
                     environment_to_train=grid,
                     dilation_radius=params[0],
