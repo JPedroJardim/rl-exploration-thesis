@@ -432,7 +432,8 @@ def train_fun_model(
 
     logging.info(f'Starting run {run_id}.')
     logging.info(f'Using device {device}.')
-    logging.info('Prepared environment.')
+    logging.info(f'Prepared environment {tmp_env.name}.')
+    logging.info(f'R = {R}, C = {C}')
 
     model = FuN(d=D,
             n_actions=tmp_env.action_space.n,
