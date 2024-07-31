@@ -19,11 +19,13 @@ if __name__ == "__main__":
                                      description="Training script for the FuN model.")
     parser.add_argument('-d', '--device', required=True)
     parser.add_argument('-r', '--runs', required=True)
+    parser.add_argument('-rec', '--record', required=True)
     parser.add_argument('-envs', '--environments', nargs='+', required=True)
 
     args = parser.parse_args()
     device_spec = args.device
     runs = int(args.runs)
+    record = bool(args.record)
     envs = args.environments
 
     if device_spec == "mps":
@@ -72,13 +74,13 @@ if __name__ == "__main__":
                 print(f'Running {grid} with R = {params[0]} and C = {params[1]}')
                 train_fun_model(
                     device_spec=device_spec,
-                    epochs=20, 
-                    steps_per_episode=50000, 
-                    steps_per_epoch=200000,
+                    epochs=2, 
+                    steps_per_episode=1000, 
+                    steps_per_epoch=50000,
                     env_record_freq=0,
                     environment_to_train=grid,
                     dilation_radius=params[0],
                     prediction_horizon=params[1],
-                    record=True,
+                    record=record,
                     run_id=run
                 )
