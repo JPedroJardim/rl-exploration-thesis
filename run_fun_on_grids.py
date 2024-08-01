@@ -41,13 +41,11 @@ if __name__ == "__main__":
         'mygridworld.txt',
         'bridge_room.txt',
         'two_rooms.txt',
-        'four_rooms.txt',
         'six_rooms.txt',
         'nine_rooms.txt',
         'spiral_room.txt',
         'ramesh_maze.txt',
-        'parr_mini_maze.txt',
-        'parr_maze.txt'
+        'parr_mini_maze.txt'
     ]
 
     if args.environments:
@@ -57,12 +55,10 @@ if __name__ == "__main__":
 
     list_of_r_c = [
         (10, 10),
-        (5, 5),
         (1, 1),
         (20, 20),
-        (50, 50),
-        (10, 50),
-        (50, 10),
+        (10, 20),
+        (20, 10),
         (1, 10),
         (10, 1)
     ]
