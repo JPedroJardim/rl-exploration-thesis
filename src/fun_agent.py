@@ -359,7 +359,7 @@ def train_fun_model(
         env_type='grayscale',
         dilation_radius=10,
         prediction_horizon=10,
-        record=True,
+        record=False,
         run_id = 0
         ):
 
@@ -379,6 +379,7 @@ def train_fun_model(
     agent_state_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'agents_states', 'fun')
     results_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'results', 'fun')
     logs_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'logs', 'fun')
+    heatmap_results_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'results', 'heatmaps')
 
     def record_ep(ep: int) -> bool:
         return ep == env_record_freq
@@ -419,6 +420,20 @@ def train_fun_model(
     # create results folder for env if it doesn't exist
     try:
         os.makedirs(os.path.join(results_path, tmp_env.name))
+    except FileExistsError:
+        # directory already exists
+        pass
+
+    # create heatmaps folder if it doesn't exist
+    try:
+        os.makedirs(os.path.join(heatmap_results_path))
+    except FileExistsError:
+        # directory already exists
+        pass
+
+    # create heatmaps folder for env if it doesn't exist
+    try:
+        os.makedirs(os.path.join(heatmap_results_path, tmp_env.name))
     except FileExistsError:
         # directory already exists
         pass
@@ -484,6 +499,8 @@ def train_fun_model(
 
         epoch_rewards = {}
 
+        epoch_heatmap = {}
+
         if record:
             env = RecordVideo(env=tmp_env, 
                             video_folder=video_path, 
@@ -500,6 +517,7 @@ def train_fun_model(
 
             # reset of env
             state, _ = env.reset()
+
             if run_on_gridworld or env_type == 'ram':
                 state = torch.from_numpy(state).to(torch.float32).to(device)
             else:
@@ -508,6 +526,9 @@ def train_fun_model(
             epoch_rewards[episode] = {}
             epoch_rewards[episode]['sum_reward'] = 0
             epoch_rewards[episode]['duration'] = 0
+
+            epoch_heatmap[episode] = []
+
             terminated = False
 
             worker_policy_delta = 0
@@ -515,6 +536,7 @@ def train_fun_model(
 
             while episode_steps < steps_per_episode and not terminated:
                 model_action, w_policy_value, w_intrinsic_reward, w_value, m_value, m_cosine_similarity = model(state)
+                epoch_heatmap[episode].append(state.tolist())
 
                 # incentivate exploration
                 sample = random.random()
@@ -526,6 +548,8 @@ def train_fun_model(
                     action = torch.tensor(env.action_space.sample())
                 
                 state, reward, terminated, _, _ = env.step(action.item())
+
+
                 if run_on_gridworld or env_type == 'ram':
                     state = torch.from_numpy(state).to(torch.float32).to(device)
                 else:
@@ -577,6 +601,9 @@ def train_fun_model(
 
         with open(os.path.join(results_path, env.name, f'{run_id}_epoch{epoch}_{C}_{R}.json'), 'w') as f:
             json.dump(epoch_rewards, f)
+
+        with open(os.path.join(heatmap_results_path, env.name, f'{run_id}_epoch{epoch}_{C}_{R}.json'), 'w') as f:
+            json.dump(epoch_heatmap, f)
 
     env.close()
 
