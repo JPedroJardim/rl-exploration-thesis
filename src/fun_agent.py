@@ -527,7 +527,7 @@ def train_fun_model(
             epoch_rewards[episode]['sum_reward'] = 0
             epoch_rewards[episode]['duration'] = 0
 
-            epoch_heatmap[episode] = []
+            epoch_heatmap[episode] = {}
 
             terminated = False
 
@@ -536,7 +536,11 @@ def train_fun_model(
 
             while episode_steps < steps_per_episode and not terminated:
                 model_action, w_policy_value, w_intrinsic_reward, w_value, m_value, m_cosine_similarity = model(state)
-                epoch_heatmap[episode].append(state.tolist())
+                
+                if not epoch_heatmap[episode][state.tolist()]:
+                    epoch_heatmap[episode][state.tolist()]
+                else:
+                    epoch_heatmap[episode][state.tolist()] = epoch_heatmap[episode][state.tolist()] + 1
 
                 # incentivate exploration
                 sample = random.random()
