@@ -518,6 +518,8 @@ def train_fun_model(
             # reset of env
             state, _ = env.reset()
 
+            heatmap_state = state.copy()
+
             if run_on_gridworld or env_type == 'ram':
                 state = torch.from_numpy(state).to(torch.float32).to(device)
             else:
@@ -537,10 +539,10 @@ def train_fun_model(
             while episode_steps < steps_per_episode and not terminated:
                 model_action, w_policy_value, w_intrinsic_reward, w_value, m_value, m_cosine_similarity = model(state)
                 
-                if not epoch_heatmap[episode][state.tolist()]:
-                    epoch_heatmap[episode][state.tolist()]
+                if str(heatmap_state) not in epoch_heatmap[episode]:
+                    epoch_heatmap[episode][str(heatmap_state)] = 1
                 else:
-                    epoch_heatmap[episode][state.tolist()] = epoch_heatmap[episode][state.tolist()] + 1
+                    epoch_heatmap[episode][str(heatmap_state)] = epoch_heatmap[episode][str(heatmap_state)] + 1
 
                 # incentivate exploration
                 sample = random.random()
@@ -553,6 +555,7 @@ def train_fun_model(
                 
                 state, reward, terminated, _, _ = env.step(action.item())
 
+                heatmap_state = state.copy()
 
                 if run_on_gridworld or env_type == 'ram':
                     state = torch.from_numpy(state).to(torch.float32).to(device)
