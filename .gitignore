@@ -7,9 +7,6 @@ agents_states/fun/*
 logs/fun/*
 !logs/fun/placeholder.txt
 
-results/fun/*
-!results/fun/placeholder.txt
-
 docs/articles/*
 !docs/articles/placeholder.txt
 

@@ -49,9 +49,15 @@ Run 7: r = c = 1
 
 Run 0 with heatmap
 parkin
-    - 3: 'empty_room.txt'
+    - 3: 'empty_room.txt' DONE
 garlick
     - 4: 'mygridworld.txt'
     - 5: 'bridge_room.txt'
 workhorse
-    - 'two_rooms.txt'
+    - 'two_rooms.txt' DONE
+    - 'six_rooms.txt' DONE
+    - 'nine_rooms.txt' ONGOING
+    - 'spiral_room.txt' ONGOING
+    - 'ramesh_maze.txt' ONGOING
+    - 'parr_mini_maze.txt' ONGOING
+    - 'parr_maze.txt' ONGOING
