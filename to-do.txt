@@ -51,13 +51,13 @@ Run 0 with heatmap
 parkin
     - 3: 'empty_room.txt' DONE
 garlick
-    - 4: 'mygridworld.txt'
-    - 5: 'bridge_room.txt'
+    - 4: 'mygridworld.txt' DONE
+    - 5: 'bridge_room.txt' DONE
 workhorse
     - 'two_rooms.txt' DONE
     - 'six_rooms.txt' DONE
-    - 'nine_rooms.txt' ONGOING
-    - 'spiral_room.txt' ONGOING
-    - 'ramesh_maze.txt' ONGOING
-    - 'parr_mini_maze.txt' ONGOING
-    - 'parr_maze.txt' ONGOING
+    - 'nine_rooms.txt' DONE
+    - 'spiral_room.txt' DONE
+    - 'ramesh_maze.txt' DONE
+    - 'parr_mini_maze.txt' DONE
+    - 'parr_maze.txt' ONGOING˜

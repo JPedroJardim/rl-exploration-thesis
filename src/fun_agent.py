@@ -368,7 +368,7 @@ def train_fun_model(
     WORKER_ALPHA = 0.99
     WORKER_GAMMA = 0.99
     MANAGER_GAMMA = 0.99
-    LR = 0.99
+    LR = 1e-4
     D = 256
     K = 16
     C = prediction_horizon
@@ -379,7 +379,7 @@ def train_fun_model(
     agent_state_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'agents_states', 'fun')
     results_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'results', 'fun')
     logs_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'logs', 'fun')
-    heatmap_results_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'results', 'heatmaps')
+    heatmap_results_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'results', 'heatmaps', 'fun')
 
     def record_ep(ep: int) -> bool:
         return ep == env_record_freq
