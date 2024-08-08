@@ -15,11 +15,11 @@ if __name__ == "__main__":
     """
 
 
-    parser = argparse.ArgumentParser(prog="FuN Model",
-                                     description="Training script for the FuN model.")
+    parser = argparse.ArgumentParser(prog="DQN Model",
+                                     description="Training script for the DQN model.")
     parser.add_argument('-d', '--device', required=True)
-    parser.add_argument('-rid', '--run_id', required=True)
-    parser.add_argument('-rec', '--record', required=True)
+    parser.add_argument('-rid', '--run_id', required=False, default=0)
+    parser.add_argument('-rec', '--record', required=False, default=0)
     parser.add_argument('-envs', '--environments', nargs='+', required=False)
     parser.add_argument('-e', '--epochs', required=False, default=20)
     parser.add_argument('-spe', '--steps_per_episode', required=False, default=20_000)
