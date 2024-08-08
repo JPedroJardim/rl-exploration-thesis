@@ -548,7 +548,8 @@ def train_fun_model(
                 sample = random.random()
                 eps_threshold = EPS_START - min((EPS_START - EPS_END), (EPS_DECAY * eps_steps))
 
-                if sample < eps_threshold:
+                # eps_threshold starts at 0.9 and decreases, so in the beginning there is a 10% chance of having a sampled float above 0.9 ( float is [0;1[ )
+                if sample > eps_threshold:
                     action = model_action
                 else:
                     action = torch.tensor(env.action_space.sample())
