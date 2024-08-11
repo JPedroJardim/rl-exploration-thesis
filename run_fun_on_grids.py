@@ -24,7 +24,6 @@ if __name__ == "__main__":
     parser.add_argument('-e', '--epochs', required=False, default=20)
     parser.add_argument('-spe', '--steps_per_episode', required=False, default=20_000)
     parser.add_argument('-spep', '--steps_per_epoch', required=False, default=100_000)
-    parser.add_argument('-spep', '--steps_per_epoch', required=False, default=100_000)
     parser.add_argument('-rcidx', '--rcidx', required=False)
 
     args = parser.parse_args()
