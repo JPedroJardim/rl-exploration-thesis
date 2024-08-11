@@ -24,6 +24,8 @@ if __name__ == "__main__":
     parser.add_argument('-e', '--epochs', required=False, default=20)
     parser.add_argument('-spe', '--steps_per_episode', required=False, default=20_000)
     parser.add_argument('-spep', '--steps_per_epoch', required=False, default=100_000)
+    parser.add_argument('-spep', '--steps_per_epoch', required=False, default=100_000)
+    parser.add_argument('-rcidx', '--rcidx', required=False)
 
     args = parser.parse_args()
     device_spec = args.device
@@ -33,6 +35,8 @@ if __name__ == "__main__":
     epochs=int(args.epochs)
     steps_per_episode=int(args.steps_per_episode)
     steps_per_epoch=int(args.steps_per_epoch)
+
+    rcidx = int(args.rcidx)
 
     
     if device_spec == "mps":
@@ -70,6 +74,11 @@ if __name__ == "__main__":
         (10, 1)
     ]
 
+    if rcidx:
+        working_list_of_rc = list_of_r_c[rcidx]
+    else:
+        working_list_of_rc = list_of_r_c
+
     if not np.all([grid in list_of_possible_grids for grid in envs]):
         raise ValueError('One of the environments given is not possible.')
 
@@ -80,7 +89,7 @@ if __name__ == "__main__":
     print(f"\tEnvironments: {envs}")
 
     for grid in envs:
-        for params in list_of_r_c:
+        for params in working_list_of_rc:
             print(f'Running {grid} with R = {params[0]} and C = {params[1]}')
             train_fun_model(
                 device_spec=device_spec,
