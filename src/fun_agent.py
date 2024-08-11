@@ -481,7 +481,6 @@ def train_fun_model(
     TOTAL_TRAIN_STEPS = epochs * steps_per_epoch
     EPS_DECAY = (EPS_START - EPS_END)/TOTAL_TRAIN_STEPS
 
-    eps_threshold = 0.2
 
     logging.info(f'EPS DECAY: {EPS_DECAY}')
 
@@ -548,7 +547,7 @@ def train_fun_model(
 
                 # incentivate exploration
                 sample = random.random()
-                #eps_threshold = EPS_START - min((EPS_START - EPS_END), (EPS_DECAY * eps_steps))
+                eps_threshold = EPS_START - min((EPS_START - EPS_END), (EPS_DECAY * eps_steps))
                 
 
                 # eps_threshold starts at 0.9 and decreases, so in the beginning there is a 10% chance of having a sampled float above 0.9 ( float is [0;1[ )
