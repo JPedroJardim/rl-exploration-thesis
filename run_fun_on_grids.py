@@ -44,15 +44,12 @@ if __name__ == "__main__":
 
 
     list_of_possible_grids = [
-        'empty_room.txt',
         'mygridworld.txt',
         'bridge_room.txt',
-        'two_rooms.txt',
-        'six_rooms.txt',
+        'four_rooms.txt',
         'nine_rooms.txt',
         'spiral_room.txt',
         'ramesh_maze.txt',
-        'parr_mini_maze.txt',
         'parr_maze.txt'
     ]
 
