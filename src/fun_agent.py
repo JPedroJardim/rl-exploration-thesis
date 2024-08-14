@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
+from torchviz.dot import make_dot
+
 import gymnasium as gym
 from gym.wrappers import RecordVideo
 
@@ -22,6 +24,7 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
 from gridworld import GridWorldEnv
+from continuous_gridworld import ContinuousRoomsEnvironment
 
 
 class fixedSizeList():
@@ -90,8 +93,11 @@ class dLSTM(nn.Module):
 
 
     def reset(self):
-        self.hn = [torch.zeros(self.lstm.hidden_size, requires_grad=False, device=self.device) for _ in range(self.r)]
-        self.cn = [torch.zeros(self.lstm.hidden_size, requires_grad=False, device=self.device) for _ in range(self.r)]
+        #self.hn = [torch.zeros(self.lstm.hidden_size, requires_grad=False, device=self.device) for _ in range(self.r)]
+        #self.cn = [torch.zeros(self.lstm.hidden_size, requires_grad=False, device=self.device) for _ in range(self.r)]
+
+        self.hn = [x.clone().detach() for x in self.hn]
+        self.cn = [x.clone().detach() for x in self.cn]
 
         self.tick = 0
 
@@ -158,31 +164,34 @@ class Worker(nn.Module):
 
     def reset(self):
         self.f_wrnn_states = (
-            torch.zeros(self.f_wrnn.hidden_size, requires_grad=False, device=self.device),
-            torch.zeros(self.f_wrnn.hidden_size, requires_grad=False, device=self.device)
+            self.f_wrnn_states[0].clone().detach(),
+            self.f_wrnn_states[1].clone().detach()
         )
 
 
     def forward(self, z: torch.Tensor, goals: torch.Tensor):
+        logging.debug(f'Worker - Z: {z}')
         goal_summation = torch.sum(goals, dim=0)
         logging.debug(f'Worker - Goal sum: {goal_summation.shape}')
         w = self.phi(goal_summation)
         #w = w.unsqueeze(1)
-        logging.debug(f'Worker - W: {w.shape}')
+        logging.debug(f'Worker - W: {w}')
 
         u_flat, c_x = self.f_wrnn(z, self.f_wrnn_states) # output is R^|a|*k
-        logging.debug(f'Worker - U Flat: {u_flat.shape}')
-        logging.debug(f'Worker - C_x: {c_x.shape}')
+        logging.debug(f'Worker - RNN states: {self.f_wrnn_states}')
+        logging.debug(f'Worker - U Flat: {u_flat}')
+        logging.debug(f'Worker - C_x: {c_x}')
 
-        #self.f_wrnn_states = (u_flat.detach(), c_x.detach())
+        self.f_wrnn_states = (u_flat.data, c_x.data)
 
         u = u_flat.view((self.n_actions, self.k))
 
-        logging.debug(f'Worker - U: {u.shape}')
+        logging.debug(f'Worker - U: {u}')
 
-        logging.debug(f'Worker - U@w: {(u@w).shape}')
+        policy_values = u@w
+        logging.debug(f'Worker - U@w: {policy_values}')
 
-        action_probs = torch.softmax(u@w, dim=0)#.squeeze(1)
+        action_probs = torch.softmax(policy_values, dim=0)#.squeeze(1)
 
         logging.debug(f'Worker - Action Probabilities: {action_probs}')
 
@@ -190,15 +199,15 @@ class Worker(nn.Module):
 
         logging.debug(f'Worker - value: {value}')
 
-        self.picked_action_prob, picked_action = torch.max(action_probs, dim=0) 
+        picked_action_prob, picked_action = torch.max(action_probs, dim=0)
 
-        logging.debug(f'Worker - picked action index and probability: {picked_action} {self.picked_action_prob}')
+        logging.debug(f'Worker - picked action index and probability: {picked_action} {picked_action_prob}')
 
-        return picked_action, self.picked_action_prob, value
+        return picked_action.data, picked_action_prob, value
 
 
 class Manager(nn.Module):
-    def __init__(self, d: int, k: int, c: int, r: int, device=None):
+    def __init__(self, d: int, k: int, c: int, r: int, goal_eps: float, device=None):
         super().__init__()
 
         self.d, self.k, self.c, self.r = d, k, c, r
@@ -206,11 +215,13 @@ class Manager(nn.Module):
         self.f_mspace = nn.Sequential(
             nn.Linear(d, d),
             nn.ReLU()
-        )
+        ).to(device=device)
 
         self.f_mrnn = dLSTM(r=r, input_size=d, hidden_size=d, device=device)
 
-        self.value_function = nn.Linear(d, 1)
+        self.value_function = nn.Linear(d, 1).to(device=device)
+
+        self.goal_epsilon = goal_eps
 
 
     def _get_cosine_similarity(self, state_space_arr, goal_vec, state):
@@ -226,6 +237,7 @@ class Manager(nn.Module):
     def reset(self):
         self.f_mrnn.reset()
 
+
     def forward(self, z, state_space_arr):
         s = self.f_mspace(z)
         logging.debug(f'Manager - State space map: {s.shape}')
@@ -236,12 +248,17 @@ class Manager(nn.Module):
         g = F.normalize(g_hat, dim=0)
         logging.debug(f'Manager - Post goal normalization: {g.shape}')
 
+        # incentivate exploration
+        sample = random.random()
+        if sample < self.goal_epsilon:
+            g = torch.rand_like(g)
+
         value = self.value_function(g_hat)
 
         cosine_similarity = self._get_cosine_similarity(state_space_arr, g, s)
-        logging.debug(f'Manager - Cosine similarity: {cosine_similarity.shape}')
+        logging.debug(f'Manager - Cosine similarity: {cosine_similarity}')
 
-        return g, s, value, cosine_similarity
+        return g.detach(), s.detach(), value, cosine_similarity.detach()
 
 
 class FuN(nn.Module):
@@ -253,12 +270,15 @@ class FuN(nn.Module):
                  r: int,
                  run_on_gridworld=False,
                  is_ram = False,
-                 device=None):
+                 device=None,
+                 manager_goal_eps=0.1):
         
         super().__init__()
         self.d, self.n_actions, self.k, self.c, self.r = d, n_actions, k, c, r
         
         self.device = device
+
+        self.manager_goal_eps = manager_goal_eps
 
         self.is_ram = is_ram
         self.run_on_gridworld = run_on_gridworld
@@ -266,8 +286,8 @@ class FuN(nn.Module):
         if self.run_on_gridworld:
             self.percept = nn.Sequential(
                                 nn.Linear(2, self.d), # 2 because on a grid the agent location (x, y) = state
-                                nn.ReLU()
-                            )
+                                nn.ReLU(),
+                            ).requires_grad_(False).to(device=device)
         elif is_ram:
             self.percept = nn.Sequential(
                                 nn.Linear(128, self.d),
@@ -276,7 +296,7 @@ class FuN(nn.Module):
         else:
             self.percept = Percept()
 
-        self.manager = Manager(d, k, c, r, device=device)
+        self.manager = Manager(d, k, c, r, goal_eps=manager_goal_eps, device=device)
         
         self.worker = Worker(d, n_actions, k, c, device=device)
 
@@ -287,15 +307,15 @@ class FuN(nn.Module):
     def _worker_intrinsic_reward(self):
         current_state = self.state_space_arr[-1]
 
-        cosine_sim_sum = torch.zeros(size=(256,), device=self.device)
+        cosine_sim_sum = torch.zeros(size=(self.d,), requires_grad=False, device=self.device)
 
         for i in range(0, len(self.state_space_arr)-1):
             cosine_sim_sum += F.cosine_similarity((current_state - self.state_space_arr[i]).unsqueeze(0),
                                                   self.goal_arr[i].unsqueeze(0))
 
-        logging.debug(f'Worker Loss Function - sum of cosine: {torch.sum(cosine_sim_sum)}')
+        logging.debug(f'Worker Loss Function - sum of cosine: {torch.sum(cosine_sim_sum)/self.c}')
 
-        return torch.sum(cosine_sim_sum/self.c)
+        return torch.sum(cosine_sim_sum)/self.c
 
 
     def reset_internal_state(self):
@@ -330,23 +350,22 @@ class FuN(nn.Module):
         logging.debug(f'FuN - Size after percept: {percept_output.shape}')
 
         #with torch.no_grad():
-        goal, state, m_value, m_cosine_sim = self.manager(percept_output, self.state_space_arr)
+        goal, state, m_value, m_cosine_sim = self.manager(percept_output.data, self.state_space_arr)
         logging.debug(f'FuN - Size after manager: {goal.shape}')
 
         #with torch.no_grad():
-        self.goal_arr.push(goal.detach())
+        self.goal_arr.push(goal)
+        self.state_space_arr.push(state)
         logging.debug(f'FuN - Size of goal arr: {self.goal_arr.getListAsTensor().shape}')
 
         #with torch.no_grad():
-        action, policy_value, w_value = self.worker(percept_output, self.goal_arr.getListAsTensor())
+        action, policy_value, w_value = self.worker(percept_output.data, self.goal_arr.getListAsTensor())
         logging.debug(f'FuN - after worker: {action}')
-
-        #with torch.no_grad():
-        self.state_space_arr.push(state.detach())
+        
 
         w_intrinsic_reward = self._worker_intrinsic_reward()
 
-        return action.data, policy_value, w_intrinsic_reward, w_value, m_value, m_cosine_sim
+        return action, policy_value, w_intrinsic_reward, w_value, m_value, m_cosine_sim
 
 
 def train_fun_model(
@@ -369,8 +388,8 @@ def train_fun_model(
     WORKER_GAMMA = 0.99
     MANAGER_GAMMA = 0.99
     LR = 1e-4
-    D = 256
-    K = 16
+    D = 128 #256
+    K = 8 #16
     C = prediction_horizon
     R = dilation_radius
 
@@ -380,6 +399,7 @@ def train_fun_model(
     results_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'results', 'fun')
     logs_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'logs', 'fun')
     heatmap_results_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'results', 'heatmaps', 'fun')
+    envs_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),'..', 'envs')
 
     def record_ep(ep: int) -> bool:
         return ep == env_record_freq
@@ -387,8 +407,8 @@ def train_fun_model(
     run_on_gridworld = '.txt' in environment_to_train
 
     if run_on_gridworld:
-        tmp_env = GridWorldEnv(filename=environment_to_train, render_mode='rgb_array')
-        tmp_env.name = tmp_env.filename.split('.txt')[0]
+        tmp_env = ContinuousRoomsEnvironment(room_template_file_path=os.path.join(envs_path, environment_to_train), movement_penalty=0)
+        tmp_env.name = environment_to_train.split('.txt')[0]
     else:
         if environment_to_train == 'spaceinvaders':
             tmp_env = gym.make("ALE/SpaceInvaders-v5",
@@ -455,6 +475,7 @@ def train_fun_model(
             k=K,
             c=C,
             r=R,
+            manager_goal_eps=0.2,
             run_on_gridworld=run_on_gridworld,
             is_ram=(True if env_type=='ram' else False),
             device=device).to(device)
@@ -500,7 +521,8 @@ def train_fun_model(
 
         epoch_rewards = {}
 
-        epoch_heatmap = {}
+        env_size = tmp_env.size
+        epoch_heatmap = np.zeros(shape=env_size)
 
         if record:
             env = RecordVideo(env=tmp_env, 
@@ -519,7 +541,8 @@ def train_fun_model(
             # reset of env
             state, _ = env.reset()
 
-            heatmap_state = state.copy()
+            converted_state = env._get_cell(state)
+            heatmap_state = [int(converted_state[0]), int(converted_state[1])]
 
             if run_on_gridworld or env_type == 'ram':
                 state = torch.from_numpy(state).to(torch.float32).to(device)
@@ -530,35 +553,33 @@ def train_fun_model(
             epoch_rewards[episode]['sum_reward'] = 0
             epoch_rewards[episode]['duration'] = 0
 
-            epoch_heatmap[episode] = {}
-
             terminated = False
 
             worker_policy_delta = 0
             manager_goal_delta = 0
 
             while episode_steps < steps_per_episode and not terminated:
-                model_action, w_policy_value, w_intrinsic_reward, w_value, m_value, m_cosine_similarity = model(state)
-                
-                if str(heatmap_state) not in epoch_heatmap[episode]:
-                    epoch_heatmap[episode][str(heatmap_state)] = 1
-                else:
-                    epoch_heatmap[episode][str(heatmap_state)] = epoch_heatmap[episode][str(heatmap_state)] + 1
-
                 # incentivate exploration
-                sample = random.random()
-                eps_threshold = EPS_START - min((EPS_START - EPS_END), (EPS_DECAY * eps_steps))
+                #sample = random.random()
+                #eps_threshold = EPS_START - min((EPS_START - EPS_END), (EPS_DECAY * eps_steps))
+
+                #fig = make_dot(model(state, eps_threshold), show_attrs=True, show_saved=True)
+                #fig.render('fun_dot', format='png')
+                action, w_policy_value, w_intrinsic_reward, w_value, m_value, m_cosine_similarity = model(state)
+                
+                epoch_heatmap[heatmap_state[0]][heatmap_state[1]] += 1
                 
 
                 # eps_threshold starts at 0.9 and decreases, so in the beginning there is a 10% chance of having a sampled float above 0.9 ( float is [0;1[ )
-                if sample > eps_threshold:
-                    action = model_action
-                else:
-                    action = torch.tensor(env.action_space.sample())
+                #if sample > eps_threshold:
+                #action = model_action
+                #else:
+                #    action = torch.tensor(env.action_space.sample())
                 
                 state, reward, terminated, _, _ = env.step(action.item())
 
-                heatmap_state = state.copy()
+                converted_state = env._get_cell(state)
+                heatmap_state = [int(converted_state[0]), int(converted_state[1])]
 
                 if run_on_gridworld or env_type == 'ram':
                     state = torch.from_numpy(state).to(torch.float32).to(device)
@@ -572,6 +593,9 @@ def train_fun_model(
                 # manager section
                 m_advantage_function = (MANAGER_GAMMA * reward) - m_value
                 manager_goal_delta += m_advantage_function * m_cosine_similarity
+
+                #make_dot(manager_goal_delta).render('manager_goal_delta', format='png')
+                #make_dot(worker_policy_delta).render('worker_policy_delta', format='png')
 
                 episode_rewards.append(reward)
                 episode_steps += 1
@@ -595,7 +619,7 @@ def train_fun_model(
             logging.info(f"\t\tTerminated flag {terminated}")
             logging.info(f"\t\tEpoch steps {epoch_steps}")
             logging.info(f"\t\tTotal reward {sum(episode_rewards)}")
-            logging.info(f"\t\tCurrent exploration threshold {format(eps_threshold, '.5f')}")
+            #logging.info(f"\t\tCurrent exploration threshold {format(eps_threshold, '.5f')}")
 
             epoch_rewards[episode]['sum_reward'] = sum(episode_rewards)
             epoch_rewards[episode]['duration'] = episode_steps
@@ -612,8 +636,14 @@ def train_fun_model(
         with open(os.path.join(results_path, env.name, f'{run_id}_epoch{epoch}_{C}_{R}.json'), 'w') as f:
             json.dump(epoch_rewards, f)
 
-        with open(os.path.join(heatmap_results_path, env.name, f'{run_id}_epoch{epoch}_{C}_{R}.json'), 'w') as f:
-            json.dump(epoch_heatmap, f)
+        #with open(os.path.join(heatmap_results_path, env.name, f'{run_id}_epoch{epoch}_{C}_{R}.json'), 'w') as f:
+        #    json.dump(epoch_heatmap, f)
+
+        np.savetxt(
+            os.path.join(heatmap_results_path, env.name, f'{run_id}_epoch{epoch}_{C}_{R}.csv'), 
+            epoch_heatmap, 
+            delimiter=',',
+            fmt='%u')
 
     env.close()
 

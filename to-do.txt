@@ -7,30 +7,6 @@ Tasks
 
 
 
-GRAYSCALE
-python3.11 ./src/fun_agent.py -d cpu -e 5 -spe 50000 -spep 10000 -evs 100 -ut  95.58s user 106.97s system 213% cpu 1:34.83 total
-
-RAM
-python3.11 ./src/fun_agent.py -d cpu -e 5 -spe 50000 -spep 10000 -evs 100 -ut  67.49s user 23.61s system 139% cpu 1:05.10 total
-
-
-Run everything on RAM
-
-Run 1; r = c = 10 (as in the article, used as a baseline):
-    - mspacman: aching GPU3
-    - spaceinvaders: parkin GPU1
-    - montezuma: parkin GPU2
-
-Run 2; r > c ; r = 10 c = 5
-
-Run 3; r < c ; r = 5 c = 10
-
-Run 4: r = c = 5
-
-- 200 epochs for 1M steps for the following environments:
-    - MsPacman
-    - SpaceInvaders
-    - Montezuma
 
 
 
@@ -47,17 +23,26 @@ Run 6: r = c = 50
 Run 7: r = c = 1
 
 
-Run 0 with heatmap
-parkin
-    - 3: 'empty_room.txt' DONE
-garlick
-    - 4: 'mygridworld.txt' DONE
-    - 5: 'bridge_room.txt' DONE
 workhorse
-    - 'two_rooms.txt' DONE
-    - 'six_rooms.txt' DONE
-    - 'nine_rooms.txt' DONE
-    - 'spiral_room.txt' DONE
-    - 'ramesh_maze.txt' DONE
-    - 'parr_mini_maze.txt' DONE
-    - 'parr_maze.txt' ONGOING˜
+    - FuN
+        'empty_room.txt' ONGOING
+        'mygridworld.txt'
+        'bridge_room.txt'
+        'two_rooms.txt'
+        'six_rooms.txt'
+        'nine_rooms.txt'
+        'spiral_room.txt'
+        'ramesh_maze.txt'
+        'parr_mini_maze.txt'
+        'parr_maze.txt'
+    - DQN
+        'empty_room.txt'
+        'mygridworld.txt'
+        'bridge_room.txt'
+        'two_rooms.txt'
+        'six_rooms.txt'
+        'nine_rooms.txt'
+        'spiral_room.txt'
+        'ramesh_maze.txt'
+        'parr_mini_maze.txt'
+        'parr_maze.txt'

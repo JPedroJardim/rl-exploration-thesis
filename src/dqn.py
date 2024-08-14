@@ -1,7 +1,7 @@
 import gymnasium as gym
 from gym.wrappers import RecordVideo
 
-import math
+import numpy as np
 import random
 #import matplotlib.pyplot as plt
 from collections import namedtuple, deque
@@ -22,7 +22,7 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
 from gridworld import GridWorldEnv
-
+from continuous_gridworld import ContinuousRoomsEnvironment
 
 Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward'))
@@ -46,16 +46,16 @@ class DQN(nn.Module):
     def __init__(self, n_actions):
         super(DQN, self).__init__()
 		# initialize sets of FC
-        self.fc1 = nn.Linear(in_features=2, out_features=256)
-        self.fc2 = nn.Linear(in_features=256, out_features=256)
-        self.fc3 = nn.Linear(in_features=256, out_features=n_actions)
+        self.fc1 = nn.Linear(in_features=2, out_features=64)
+        self.fc2 = nn.Linear(in_features=64, out_features=128)
+        self.fc3 = nn.Linear(in_features=128, out_features=n_actions)
 
     # Called with either one element to determine next action, or a batch
     # during optimization. Returns tensor([[left0exp,right0exp]...]).
     def forward(self, x):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
-        x = F.log_softmax(self.fc3(x), dim=0)
+        x = self.fc3(x)
 
         return x
 
@@ -67,6 +67,7 @@ def train_dqn_model(
         steps_per_epoch: int,
         env_record_freq: int,
         environment_to_train = None,
+        continuous_state_space=False,
         record=False,
         run_id = 0):
     
@@ -80,20 +81,25 @@ def train_dqn_model(
     GAMMA = 0.99
     TAU = 0.005
     LR = 1e-4
-    MEM_SIZE = 10000
+    MEM_SIZE = 2000
 
     video_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'recordings', 'dqn')
     #agent_state_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'agents_states', 'dqn')
     results_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'results', 'dqn')
     logs_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'logs', 'dqn')
     heatmap_results_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'results', 'heatmaps', 'dqn')
+    envs_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),'..', 'envs')
+
 
     def record_ep(ep: int) -> bool:
         return ep == env_record_freq
 
     run_on_gridworld = '.txt' in environment_to_train
 
-    if run_on_gridworld:
+    if continuous_state_space:
+        tmp_env = ContinuousRoomsEnvironment(room_template_file_path=os.path.join(envs_path, environment_to_train), movement_penalty=0)
+        tmp_env.name = environment_to_train.split('.txt')[0]
+    elif run_on_gridworld:
         tmp_env = GridWorldEnv(filename=environment_to_train, render_mode='rgb_array')
         tmp_env.name = tmp_env.filename.split('.txt')[0]
     else:
@@ -204,7 +210,8 @@ def train_dqn_model(
 
         epoch_rewards = {}
 
-        epoch_heatmap = {}
+        env_size = tmp_env.size
+        epoch_heatmap = np.zeros(shape=env_size)
 
         if record:
             env = RecordVideo(env=tmp_env, 
@@ -221,8 +228,10 @@ def train_dqn_model(
 
             # reset of env
             state, _ = env.reset()
-
-            heatmap_state = state.copy()
+            converted_state = env._get_cell(state)
+            heatmap_state = [int(converted_state[0]), int(converted_state[1])]
+            #heatmap_state = env._get_cell(state)#state.astype(int, copy=True)
+            #print(heatmap_state)
 
             state = torch.from_numpy(state).unsqueeze(0).to(torch.float32).to(device)
 
@@ -230,19 +239,15 @@ def train_dqn_model(
             epoch_rewards[episode]['sum_reward'] = 0
             epoch_rewards[episode]['duration'] = 0
 
-            epoch_heatmap[episode] = {}
-
             terminated = False
 
 
             while episode_steps < steps_per_episode and not terminated:
-                if str(heatmap_state) not in epoch_heatmap[episode]:
-                    epoch_heatmap[episode][str(heatmap_state)] = 1
-                else:
-                    epoch_heatmap[episode][str(heatmap_state)] = epoch_heatmap[episode][str(heatmap_state)] + 1
-
+                epoch_heatmap[heatmap_state[0]][heatmap_state[1]] += 1
+                
                 sample = random.random()
                 eps_threshold = EPS_START - min((EPS_START - EPS_END), (EPS_DECAY * eps_steps))
+
 
                 if sample > eps_threshold:
                     with torch.no_grad():
@@ -265,7 +270,8 @@ def train_dqn_model(
 
 
                 next_state, reward, terminated, _, _ = env.step(action.item())
-                heatmap_state = next_state.copy()
+                converted_state = env._get_cell(next_state)
+                heatmap_state = [int(converted_state[0]), int(converted_state[1])]
                 next_state = torch.from_numpy(next_state).unsqueeze(0).to(torch.float32).to(device)
 
                 reward_for_log = reward
@@ -365,8 +371,14 @@ def train_dqn_model(
         with open(os.path.join(results_path, env.name, f'{run_id}_epoch{epoch}.json'), 'w') as f:
             json.dump(epoch_rewards, f)
 
-        with open(os.path.join(heatmap_results_path, env.name, f'{run_id}_epoch{epoch}.json'), 'w') as f:
-            json.dump(epoch_heatmap, f)
+        #with open(os.path.join(heatmap_results_path, env.name, f'{run_id}_epoch{epoch}.json'), 'w') as f:
+        #    json.dump(epoch_heatmap, f)
+
+        np.savetxt(
+            os.path.join(heatmap_results_path, env.name, f'{run_id}_epoch{epoch}.csv'), 
+            epoch_heatmap, 
+            delimiter=',',
+            fmt='%u')
 
     env.close()
 
@@ -380,6 +392,7 @@ if __name__ == "__main__":
     parser.add_argument('-spep', '--steps_per_epoch', required=True)
     parser.add_argument('-evs', '--env_record_step', required=True)
     parser.add_argument('-env', '--environment', required=False)
+    parser.add_argument('-rec', '--record', required=False)
 
     args = parser.parse_args()
     device_spec = args.device
@@ -389,8 +402,7 @@ if __name__ == "__main__":
     env_record_step = int(args.env_record_step)
     environment_to_train = args.environment
     env_type = args.env_type
-    dilation_radius = int(args.dilation_radius) # R
-    prediction_horizon = int(args.prediction_horizon) # C
+    record = bool(int(args.record))
 
     if device_spec == "mps":
         if not torch.backends.mps.is_available():
@@ -402,10 +414,10 @@ if __name__ == "__main__":
     train_dqn_model(
         device_spec=device_spec,
         epochs=epochs, 
-                    steps_per_episode=steps_per_episode, 
-                    steps_per_epoch=steps_per_epoch,
-                    env_record_freq=env_record_step,
-                    environment_to_train=environment_to_train,
-                    env_type=env_type,
-                    dilation_radius=dilation_radius,
-                    prediction_horizon=prediction_horizon)
+        steps_per_episode=steps_per_episode, 
+        steps_per_epoch=steps_per_epoch,
+        env_record_freq=env_record_step,
+        environment_to_train=environment_to_train,
+        env_type=env_type,
+        record=record
+    )

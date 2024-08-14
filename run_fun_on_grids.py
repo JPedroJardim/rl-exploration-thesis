@@ -18,13 +18,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog="FuN Model",
                                      description="Training script for the FuN model.")
     parser.add_argument('-d', '--device', required=True)
-    parser.add_argument('-rid', '--run_id', required=True)
-    parser.add_argument('-rec', '--record', required=True)
+    parser.add_argument('-rid', '--run_id', required=False, default=0)
+    parser.add_argument('-rec', '--record', required=False, default=0)
     parser.add_argument('-envs', '--environments', nargs='+', required=False)
     parser.add_argument('-e', '--epochs', required=False, default=20)
     parser.add_argument('-spe', '--steps_per_episode', required=False, default=20_000)
     parser.add_argument('-spep', '--steps_per_epoch', required=False, default=100_000)
-    parser.add_argument('-rcidx', '--rcidx', required=False)
+    parser.add_argument('-rc', '--rc', nargs='+', required=False)
 
     args = parser.parse_args()
     device_spec = args.device
@@ -34,8 +34,6 @@ if __name__ == "__main__":
     epochs=int(args.epochs)
     steps_per_episode=int(args.steps_per_episode)
     steps_per_epoch=int(args.steps_per_epoch)
-
-    rcidx = int(args.rcidx)
 
     
     if device_spec == "mps":
@@ -47,6 +45,7 @@ if __name__ == "__main__":
 
 
     list_of_possible_grids = [
+        'empty_room.txt',
         'mygridworld.txt',
         'bridge_room.txt',
         'four_rooms.txt',
@@ -66,15 +65,16 @@ if __name__ == "__main__":
         (5, 5),
         (1, 1),
         (20, 20),
-        (50, 50),
-        (10, 50),
-        (50, 10),
+        (10, 5),
+        (5, 10),
         (1, 10),
         (10, 1)
     ]
 
-    if rcidx:
-        working_list_of_rc = list_of_r_c[rcidx]
+    if args.rc is not None:
+        working_list_of_rc = []
+        for rc in args.rc:
+            working_list_of_rc.append(list_of_r_c[int(rc)])
     else:
         working_list_of_rc = list_of_r_c
 
@@ -86,10 +86,11 @@ if __name__ == "__main__":
     print(f"\tRun ID: {run_id}")
     print(f"\tRecord: {record}")
     print(f"\tEnvironments: {envs}")
+    print(f"\tR and C: {working_list_of_rc}")
 
     for grid in envs:
-        for params in working_list_of_rc:
-            print(f'Running {grid} with R = {params[0]} and C = {params[1]}')
+        for r, c in working_list_of_rc:
+            print(f'Running {grid} with R = {r} and C = {c}')
             train_fun_model(
                 device_spec=device_spec,
                 epochs=epochs, 
@@ -97,8 +98,8 @@ if __name__ == "__main__":
                 steps_per_epoch=steps_per_epoch,
                 env_record_freq=0,
                 environment_to_train=grid,
-                dilation_radius=params[0],
-                prediction_horizon=params[1],
+                dilation_radius=r,
+                prediction_horizon=c,
                 record=record,
                 run_id=run_id
             )
