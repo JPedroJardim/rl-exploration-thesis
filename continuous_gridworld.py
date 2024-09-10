@@ -29,6 +29,8 @@ class ContinuousRoomsEnvironment(gym.Env):
         noisy_starts: bool = False,
         explorable: bool = False,
         render_mode: str = "human",
+        render_frame: bool = False,
+        frame_save_path: str = None
     ):
         """
         A continuous gridworld environment with continuous state and discrete action spaces.
@@ -47,7 +49,7 @@ class ContinuousRoomsEnvironment(gym.Env):
         """
         super().__init__()
 
-        self.name = None
+        self.name = room_template_file_path.split('/')[-1].split('.')[0]
 
         # Set observation bounds.
         self.y_lims = y_lims
@@ -79,6 +81,9 @@ class ContinuousRoomsEnvironment(gym.Env):
         self.render_mode = render_mode
         self.window = None
         self.clock = None
+        self.render_frame = render_frame
+        if self.render_frame:
+            self.frame_save_path = frame_save_path
 
     def _initialise_rooms(self, room_template_file_path, explorable):
         # Load gridworld template file.
@@ -181,11 +186,12 @@ class ContinuousRoomsEnvironment(gym.Env):
         if self.render_mode == "rgb_array":
             return self._render_frame()
         else:
-            self._render_frame()
+            if self.name == 'parr_maze':
+                self._render_frame(tile_size=10, agent_size=4)
+            else:
+                self._render_frame()
 
-    def _render_frame(self):
-        tile_size = 32
-        agent_size = 8
+    def _render_frame(self, tile_size=32, agent_size=8):
 
         if self.window is None and self.render_mode == "human":
             pygame.init()
@@ -196,15 +202,15 @@ class ContinuousRoomsEnvironment(gym.Env):
             self.clock = pygame.time.Clock()
 
         canvas = pygame.Surface((self.x_cells * tile_size, self.y_cells * tile_size))
-        canvas.fill((255, 255, 255))
+        canvas.fill((156, 156, 156))
 
         # Draw Gridworld.
         for x in range(self.x_cells):
             for y in range(self.y_cells):
                 if CELL_TYPES_DICT[self.gridworld[y, x]] == "wall":
-                    pygame.draw.rect(canvas, (0, 0, 0), (x * tile_size, y * tile_size, tile_size, tile_size))
+                    pygame.draw.rect(canvas, (68, 68, 68), (x * tile_size, y * tile_size, tile_size, tile_size))
                 elif CELL_TYPES_DICT[self.gridworld[y, x]] == "start":
-                    pygame.draw.rect(canvas, (0, 255, 0), (x * tile_size, y * tile_size, tile_size, tile_size))
+                    pygame.draw.rect(canvas, (255, 128, 0), (x * tile_size, y * tile_size, tile_size, tile_size))
                 elif CELL_TYPES_DICT[self.gridworld[y, x]] == "goal":
                     pygame.draw.rect(canvas, (255, 0, 0), (x * tile_size, y * tile_size, tile_size, tile_size))
 
@@ -224,6 +230,11 @@ class ContinuousRoomsEnvironment(gym.Env):
             pygame.time.wait(10)
         # Else, return an rgb array
         else:
+            if self.render_frame:
+                #with open(os.path.join(self.frame_save_path, self.name), 'w') as f:
+                print('Rendered image', self.name, 'on', os.path.join(self.frame_save_path, self.name + '.png'))
+                pygame.image.save(canvas, os.path.join(self.frame_save_path, self.name + '.png'))
+
             return np.transpose(np.array(pygame.surfarray.pixels3d(canvas)), axes=(1, 0, 2))
 
     def close(self):
@@ -245,66 +256,3 @@ class ContinuousRoomsEnvironment(gym.Env):
         Converts from an observation (coordinates in the range -10 to +10) to a state (coordinates in the cell-space).
         """
         return (self.y_interp_inv(observation[0]), self.x_interp_inv(observation[1]))
-
-
-# Import room template files.
-#from importlib.resources import files
-
-#from . import data
-
-#xu_four_rooms = files(data).joinpath("xu_four_rooms.txt")
-#empty_rooms = files(data).joinpath("empty_rooms.txt")
-
-
-class ContinuousFourRooms(ContinuousRoomsEnvironment):
-    def __init__(
-        self,
-        x_lims: Tuple[float, float] = (-10.0, 10.0),
-        y_lims: Tuple[float, float] = (-10.0, 10.0),
-        on_dir_noise_lims: Tuple[float, float] = (-0.5, 0.5),
-        off_dir_noise_lims: Tuple[float, float] = (-0.1, 0.1),
-        movement_penalty: float = -0.01,
-        goal_reward: float = 1.0,
-        noisy_starts: bool = False,
-        explorable: bool = False,
-        render_mode: str = "human",
-    ):
-        super().__init__(
-            room_template_file_path=xu_four_rooms,
-            x_lims=x_lims,
-            y_lims=y_lims,
-            on_dir_noise_lims=on_dir_noise_lims,
-            off_dir_noise_lims=off_dir_noise_lims,
-            movement_penalty=movement_penalty,
-            goal_reward=goal_reward,
-            noisy_starts=noisy_starts,
-            explorable=explorable,
-            render_mode=render_mode,
-        )
-
-
-class ContinuousEmptyRooms(ContinuousRoomsEnvironment):
-    def __init__(
-        self,
-        x_lims: Tuple[float, float] = (-10.0, 10.0),
-        y_lims: Tuple[float, float] = (-10.0, 10.0),
-        on_dir_noise_lims: Tuple[float, float] = (-0.5, 0.5),
-        off_dir_noise_lims: Tuple[float, float] = (-0.1, 0.1),
-        movement_penalty: float = -0.01,
-        goal_reward: float = 1.0,
-        noisy_starts: bool = False,
-        explorable: bool = False,
-        render_mode: str = "human",
-    ):
-        super().__init__(
-            room_template_file_path=empty_rooms,
-            x_lims=x_lims,
-            y_lims=y_lims,
-            on_dir_noise_lims=on_dir_noise_lims,
-            off_dir_noise_lims=off_dir_noise_lims,
-            movement_penalty=movement_penalty,
-            goal_reward=goal_reward,
-            noisy_starts=noisy_starts,
-            explorable=explorable,
-            render_mode=render_mode,
-        )

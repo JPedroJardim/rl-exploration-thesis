@@ -24,13 +24,11 @@ if __name__ == "__main__":
     parser.add_argument('-e', '--epochs', required=False, default=20)
     parser.add_argument('-spe', '--steps_per_episode', required=False, default=20_000)
     parser.add_argument('-spep', '--steps_per_epoch', required=False, default=100_000)
-    parser.add_argument('-css', '--continuous_state_space', required=False, default=0)
 
     args = parser.parse_args()
     device_spec = args.device
     run_id = int(args.run_id)
     record = bool(int(args.record))
-    continuous_state_space = bool(int(args.continuous_state_space))
 
     epochs=int(args.epochs)
     steps_per_episode=int(args.steps_per_episode)
@@ -47,7 +45,6 @@ if __name__ == "__main__":
 
     list_of_possible_grids = [
         'empty_room.txt',
-        'mygridworld.txt',
         'bridge_room.txt',
         'four_rooms.txt',
         'nine_rooms.txt',
@@ -70,7 +67,6 @@ if __name__ == "__main__":
     print(f"\tRun ID: {run_id}")
     print(f"\tRecord: {record}")
     print(f"\tEnvironments: {envs}")
-    print(f"\tContinuous State Space: {continuous_state_space}")
 
     for grid in envs:
         print(f'Running {grid}')
@@ -82,6 +78,5 @@ if __name__ == "__main__":
             env_record_freq=0,
             environment_to_train=grid,
             record=record,
-            run_id=run_id,
-            continuous_state_space=continuous_state_space
+            run_id=run_id
         )

@@ -25,8 +25,8 @@ def build_heatmpaps(model: str, env: str, env_size: int):
             data = np.loadtxt(f, delimiter=',')
         
         if model == 'fun':
-            epoch_id = int(file.split('_')[1][5:])
-            id = '_'.join(file.split('_')[2:]).removesuffix('.csv')
+            epoch_id = int(file.split('_')[0][5:])
+            id = '_'.join(file.split('_')[1:]).removesuffix('.csv')
 
             plt.title(f"Heatmap - {model} - {env} - {epoch_id} - {id}")
             axs = sns.heatmap(pd.DataFrame(data, columns=range(env_size[1])))
@@ -36,6 +36,15 @@ def build_heatmpaps(model: str, env: str, env_size: int):
             plt.clf()
         elif model == 'dqn':
             epoch_id = int(file.split('_')[1].split('.csv')[0][5:])
+            
+            plt.title(f"Heatmap - {model} - {env} - {epoch_id}")
+            axs = sns.heatmap(pd.DataFrame(data, columns=range(env_size[1])))
+
+            plt.savefig(os.path.join(charts_path, env, f'{env}_{epoch_id}.png'))
+            plt.cla()
+            plt.clf()
+        elif model == 'lstm':
+            epoch_id = int(file.split('.csv')[0][5:])
             
             plt.title(f"Heatmap - {model} - {env} - {epoch_id}")
             axs = sns.heatmap(pd.DataFrame(data, columns=range(env_size[1])))
@@ -76,8 +85,8 @@ def build_results(model: str, env: str):
             if 'placeholder' not in file:
                 with open(os.path.join(results_path, file), 'r') as f:
                     data = json.load(f)
-                    epoch_id = int(file.split('_')[1][5:])
-                    id = '_'.join(file.split('_')[2:]).removesuffix('.json')
+                    epoch_id = int(file.split('_')[0][5:])
+                    id = '_'.join(file.split('_')[1:]).removesuffix('.json')
 
                 if id not in reward_results.keys():
                     reward_results[id] = {}
@@ -111,11 +120,14 @@ def build_results(model: str, env: str):
             axs[0].plot(r_x, r_y, color=colors[idx%len(colors)], label=key)
             axs[1].plot(d_x, d_y, color=colors[idx%len(colors)], label=key)
     else:
-        # DQN stuff
+        # DQN and LSTM stuff
         for file in os.listdir(results_path):
             with open(os.path.join(results_path, file), 'r') as f:
                 data = json.load(f)
-                epoch_id = int(file.split('.json')[0][7:])
+                if model == 'dqn':
+                    epoch_id = int(file.split('.json')[0][7:])
+                elif model == 'lstm':
+                    epoch_id = int(file.split('.json')[0][5:])
 
             reward_results[epoch_id] = sum([data[k]['sum_reward'] for k in data.keys()])
             duration_results[epoch_id] = np.mean([data[k]['duration'] for k in data.keys()])
@@ -156,7 +168,7 @@ if __name__ == "__main__":
     parser.add_argument('-m', 
                         '--model', 
                         required=True,
-                        choices=['fun', 'dqn'])
+                        choices=['fun', 'dqn', 'lstm'])
     parser.add_argument('-envs', 
                         '--environments', 
                         required=False,
@@ -188,7 +200,7 @@ if __name__ == "__main__":
     for env, env_size in working_dict.items():
         build_results(model=model, 
                       env=env)
-        
+
         build_heatmpaps(model=model, 
                         env=env, 
                         env_size=env_size)

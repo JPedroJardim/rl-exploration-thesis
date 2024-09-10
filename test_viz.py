@@ -21,9 +21,9 @@ state_list = fixedSizeList(11)
 #while not state_list.is_at_max_capacity():
 #    state_list.push(torch.rand(2))
 
-model = FuN(d=128,
+model = FuN(d=64,
             n_actions=4,
-            k=8,
+            k=4,
             c=1,
             r=1,
             manager_goal_eps=0.2,

@@ -67,7 +67,6 @@ def train_dqn_model(
         steps_per_epoch: int,
         env_record_freq: int,
         environment_to_train = None,
-        continuous_state_space=False,
         record=False,
         run_id = 0):
     
@@ -91,37 +90,11 @@ def train_dqn_model(
     envs_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),'..', 'envs')
 
 
-    def record_ep(ep: int) -> bool:
-        return ep == env_record_freq
+    tmp_env = ContinuousRoomsEnvironment(room_template_file_path=os.path.join(envs_path, environment_to_train), movement_penalty=0)
+    tmp_env.name = environment_to_train.split('.txt')[0]
 
-    run_on_gridworld = '.txt' in environment_to_train
 
-    if continuous_state_space:
-        tmp_env = ContinuousRoomsEnvironment(room_template_file_path=os.path.join(envs_path, environment_to_train), movement_penalty=0)
-        tmp_env.name = environment_to_train.split('.txt')[0]
-    elif run_on_gridworld:
-        tmp_env = GridWorldEnv(filename=environment_to_train, render_mode='rgb_array')
-        tmp_env.name = tmp_env.filename.split('.txt')[0]
-    else:
-        if environment_to_train == 'spaceinvaders':
-            tmp_env = gym.make("ALE/SpaceInvaders-v5",
-                    obs_type=env_type, 
-                    render_mode='rgb_array')
-            tmp_env.name = 'spaceinvaders'
-        elif environment_to_train == 'mspacman':
-            tmp_env = gym.make("ALE/MsPacman-v5",
-                    obs_type=env_type, 
-                    render_mode='rgb_array')
-            tmp_env.name = 'mspacman'
-        elif environment_to_train == 'montezuma':
-            tmp_env = gym.make("ALE/MontezumaRevenge-v5",
-                    obs_type=env_type, 
-                    render_mode='rgb_array')
-            tmp_env.name = 'montezuma'
-        else:
-            raise ValueError("No suitable environment was given.")
-
-        tmp_env.metadata['render_fps'] = 30
+    tmp_env.metadata['render_fps'] = 30
 
     # create video folder for env if it doesn't exist
     try:
